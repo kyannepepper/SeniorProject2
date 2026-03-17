@@ -1,19 +1,10 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  ActivityIndicator,
-  RefreshControl,
-  Image,
-} from "react-native";
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, RefreshControl } from "react-native";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
+import { PropertyCard } from "@/components/PropertyCard";
 
 type Property = {
   property_id: string;
@@ -28,8 +19,7 @@ type Property = {
 
 export default function LandlordPropertiesScreen() {
   const router = useRouter();
-  const { session, landlordId } = useAuth();
-  const userId = session?.user?.id ?? null;
+  const { landlordId } = useAuth();
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -37,15 +27,15 @@ export default function LandlordPropertiesScreen() {
 
   const fetchProperties = useCallback(
     async (options?: { skipFullScreenLoading?: boolean }) => {
-      if (!userId) return;
+      if (!landlordId) return;
       if (!options?.skipFullScreenLoading) setLoading(true);
       try {
-        // Link: properties.landlord_id -> landlords.landlord_id, landlords.user_id = current user
-        // Inner join so we only get properties whose landlord belongs to this user
         const { data, error } = await supabase
           .from("properties")
-          .select("property_id, landlord_id, name, address, occupied, rent_amount, image_url, created_at, landlords!inner(user_id)")
-          .eq("landlords.user_id", userId)
+          .select(
+            "property_id, landlord_id, name, address, occupied, rent_amount, image_url, created_at"
+          )
+          .eq("landlord_id", landlordId)
           .order("created_at", { ascending: false });
         if (error) throw error;
         // data may include nested landlords; we only need the property fields
@@ -59,26 +49,27 @@ export default function LandlordPropertiesScreen() {
           image_url: row.image_url,
           created_at: row.created_at,
         })) as Property[]);
-      } catch {
+      } catch (err) {
+        console.error("Error fetching properties", err);
         setProperties([]);
       } finally {
         setLoading(false);
         setRefreshing(false);
       }
     },
-    [userId]
+    [landlordId]
   );
 
   // Initial load when user is available
   useEffect(() => {
-    if (userId) fetchProperties();
-  }, [userId, fetchProperties]);
+    if (landlordId) fetchProperties();
+  }, [landlordId, fetchProperties]);
 
   // Refetch whenever this screen comes into focus (e.g. after adding a property)
   useFocusEffect(
     useCallback(() => {
-      if (userId) fetchProperties();
-    }, [userId, fetchProperties])
+      if (landlordId) fetchProperties();
+    }, [landlordId, fetchProperties])
   );
 
   const filtered = useMemo(() => {
@@ -91,7 +82,7 @@ export default function LandlordPropertiesScreen() {
     );
   }, [properties, search]);
 
-  if (!userId) {
+  if (!landlordId) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#6366f1" />
@@ -152,31 +143,15 @@ export default function LandlordPropertiesScreen() {
           </View>
         ) : (
           filtered.map((p) => (
-            <TouchableOpacity
+            <PropertyCard
               key={p.property_id}
-              style={styles.card}
-              activeOpacity={0.9}
-            >
-              {p.image_url ? (
-                <Image source={{ uri: p.image_url }} style={styles.cardImage} />
-              ) : (
-                <View style={styles.cardImagePlaceholder}>
-                  <Text style={styles.cardImagePlaceholderText}>No photo</Text>
-                </View>
-              )}
-              <View style={styles.cardBody}>
-                <Text style={styles.cardName}>{p.name}</Text>
-                <Text style={styles.cardAddress} numberOfLines={1}>{p.address}</Text>
-                <View style={styles.cardRow}>
-                  <Text style={styles.cardRent}>
-                    ${p.rent_amount != null ? Number(p.rent_amount).toFixed(0) : "—"}/mo
-                  </Text>
-                  <Text style={[styles.badge, p.occupied && styles.badgeOccupied]}>
-                    {p.occupied ? "Occupied" : "Available"}
-                  </Text>
-                </View>
-              </View>
-            </TouchableOpacity>
+              name={p.name}
+              address={p.address}
+              rentAmount={p.rent_amount}
+              occupied={p.occupied}
+              imageUrl={p.image_url}
+              onPress={() => router.push(`/landlord/edit-property?propertyId=${p.property_id}`)}
+            />
           ))
         )}
 
@@ -247,62 +222,6 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
-  },
-  card: {
-    backgroundColor: "#0f172a",
-    borderRadius: 16,
-    overflow: "hidden",
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#1e293b",
-  },
-  cardImage: {
-    width: "100%",
-    height: 160,
-    backgroundColor: "#1e293b",
-  },
-  cardImagePlaceholder: {
-    width: "100%",
-    height: 160,
-    backgroundColor: "#1e293b",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  cardImagePlaceholderText: {
-    color: "#64748b",
-    fontSize: 14,
-  },
-  cardBody: {
-    padding: 16,
-  },
-  cardName: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#f8fafc",
-    marginBottom: 4,
-  },
-  cardAddress: {
-    fontSize: 14,
-    color: "#94a3b8",
-    marginBottom: 8,
-  },
-  cardRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  cardRent: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#a5b4fc",
-  },
-  badge: {
-    fontSize: 12,
-    color: "#22c55e",
-    fontWeight: "500",
-  },
-  badgeOccupied: {
-    color: "#f59e0b",
   },
   addAnother: {
     marginTop: 8,

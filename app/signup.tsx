@@ -30,17 +30,27 @@ export default function SignupScreen() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [landlordId, setLandlordId] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   async function handleSignup() {
-    if (!role || !name.trim() || !email.trim() || !password) {
+    if (!role) {
+      Alert.alert("Error", "Please select an account type.");
+      return;
+    }
+    if (!name.trim() || !email.trim() || !password) {
       Alert.alert("Error", "Please fill in name, email, and password.");
+      return;
+    }
+    if (role === "maintenance" && !landlordId.trim()) {
+      Alert.alert("Error", "Please enter the Landlord ID from your landlord.");
       return;
     }
     if (password.length < 6) {
       Alert.alert("Error", "Password must be at least 6 characters.");
       return;
     }
+
     setIsLoading(true);
     try {
       const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -71,13 +81,31 @@ export default function SignupScreen() {
         });
         if (landlordError) throw landlordError;
       } else if (role === "maintenance") {
-        const { error: workerError } = await supabase.from("maintenance_workers").insert({
+        const { data: workerData, error: workerError } = await supabase
+          .from("maintenance_workers")
+          .insert({ user_id: userId })
+          .select("maintenance_worker_id")
+          .single();
+        if (workerError) throw workerError;
+        if (workerData?.maintenance_worker_id) {
+          const { error: linkError } = await supabase.from("maintenance_worker_landlords").insert({
+            maintenance_worker_id: workerData.maintenance_worker_id,
+            landlord_id: landlordId.trim(),
+          });
+          if (linkError) throw linkError;
+        }
+      } else if (role === "tenant") {
+        // Create a tenant row linked to this user. Other fields like property_id
+        // and lease_id will be filled when a landlord accepts an application.
+        const { error: tenantError } = await supabase.from("tenants").insert({
           user_id: userId,
         });
-        if (workerError) throw workerError;
+        if (tenantError) throw tenantError;
       }
 
-      router.replace("/(app)");
+      // Go back to the root so the welcome screen can redirect
+      // based on the new user's role (tenant, landlord, etc.).
+      router.replace("/");
     } catch (error: unknown) {
       const err = error as { message?: string; details?: string };
       const message = err?.message ?? (error instanceof Error ? error.message : "Signup failed.");
@@ -142,6 +170,17 @@ export default function SignupScreen() {
           onChangeText={setPhone}
           keyboardType="phone-pad"
         />
+        {role === "maintenance" && (
+          <TextInput
+            style={styles.input}
+            placeholder="Landlord ID (get this from your landlord)"
+            placeholderTextColor="#64748b"
+            value={landlordId}
+            onChangeText={setLandlordId}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        )}
         <TextInput
           style={styles.input}
           placeholder="Password (min 6 characters)"

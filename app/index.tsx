@@ -54,16 +54,6 @@ export default function WelcomeScreen() {
         >
           <Text style={styles.secondaryButtonText}>Create Account</Text>
         </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.outlineButton}
-          onPress={() => {
-            // TODO: Fill out application - coming soon
-          }}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.outlineButtonText}>Fill Out Application</Text>
-        </TouchableOpacity>
       </View>
     </View>
   );

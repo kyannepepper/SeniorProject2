@@ -24,12 +24,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session?.user) {
-        fetchUserRole(session.user.id);
+        const metaRole = (session.user.user_metadata as { role?: UserRole } | undefined)?.role ?? null;
+        if (metaRole) {
+          setUserRole(metaRole);
+        }
+        fetchUserRole(session.user.id).finally(() => {
+          setIsLoading(false);
+        });
       } else {
         setUserRole(null);
         setLandlordId(null);
+        setIsLoading(false);
       }
-      setIsLoading(false);
     });
 
     const {
@@ -37,6 +43,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
       if (session?.user) {
+        const metaRole = (session.user.user_metadata as { role?: UserRole } | undefined)?.role ?? null;
+        if (metaRole) {
+          setUserRole(metaRole);
+        }
         await fetchUserRole(session.user.id);
       } else {
         setUserRole(null);
@@ -54,7 +64,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .select("role")
       .eq("user_id", userId)
       .single();
-    const role = (user?.role as UserRole) ?? null;
+    // If there's no row/role yet (race with signup insert), keep whatever role we already had.
+    if (!user || !user.role) {
+      return;
+    }
+    const role = user.role as UserRole;
     setUserRole(role);
     if (role === "landlord") {
       const { data: landlord } = await supabase
@@ -69,10 +83,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function signOut() {
-    await supabase.auth.signOut();
     setSession(null);
     setUserRole(null);
     setLandlordId(null);
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // Ignore signOut errors (e.g. network); local state already cleared
+    }
   }
 
   return (

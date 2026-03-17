@@ -7,7 +7,6 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
-  Alert,
   RefreshControl,
   Image,
 } from "react-native";
@@ -25,49 +24,47 @@ type MaintenanceRequest = {
   urgency: string | null;
   photo_url: string | null;
   created_at: string;
+  updated_at: string | null;
   properties?: { name: string } | null;
 };
 
-export default function MaintenanceDashboard() {
+export default function LandlordMaintenanceRequestsScreen() {
   const router = useRouter();
-  const { session, signOut } = useAuth();
-  const [maintenanceWorkerId, setMaintenanceWorkerId] = useState<string | null>(null);
+  const { landlordId } = useAuth();
   const [activeTab, setActiveTab] = useState<"uncompleted" | "completed">("uncompleted");
   const [requests, setRequests] = useState<MaintenanceRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [markingId, setMarkingId] = useState<string | null>(null);
 
-  const fetchWorkerAndRequests = useCallback(
+  const fetchRequests = useCallback(
     async (options?: { skipFullScreenLoading?: boolean }) => {
-      if (!session?.user) return;
+      if (!landlordId) return;
       if (!options?.skipFullScreenLoading) setLoading(true);
       try {
-        const { data: worker, error: workerError } = await supabase
-          .from("maintenance_workers")
-          .select("maintenance_worker_id")
-          .eq("user_id", session.user.id)
-          .single();
-        if (workerError || !worker) {
-          setMaintenanceWorkerId(null);
+        const { data: properties, error: propError } = await supabase
+          .from("properties")
+          .select("property_id")
+          .eq("landlord_id", landlordId);
+        if (propError) throw propError;
+        const propertyIds = (properties ?? []).map((p) => p.property_id);
+        if (propertyIds.length === 0) {
           setRequests([]);
           return;
         }
-        const mwId = (worker as { maintenance_worker_id: string }).maintenance_worker_id;
-        setMaintenanceWorkerId(mwId);
 
         const { data, error } = await supabase
           .from("maintenance_requests")
           .select(
             `
             request_id, property_id, tenant_id, title, description,
-            status, urgency, photo_url, created_at,
+            status, urgency, photo_url, created_at, updated_at,
             properties (name)
           `
           )
-          .eq("maintenance_worker_id", mwId)
+          .in("property_id", propertyIds)
           .order("created_at", { ascending: false });
         if (error) throw error;
+
         setRequests((data ?? []) as MaintenanceRequest[]);
       } catch (e) {
         console.error("Error loading maintenance requests", e);
@@ -77,44 +74,23 @@ export default function MaintenanceDashboard() {
         setRefreshing(false);
       }
     },
-    [session?.user?.id]
+    [landlordId]
   );
 
   useEffect(() => {
-    if (session?.user) fetchWorkerAndRequests();
-  }, [session?.user?.id, fetchWorkerAndRequests]);
+    if (landlordId) fetchRequests();
+  }, [landlordId, fetchRequests]);
 
   useFocusEffect(
     useCallback(() => {
-      if (session?.user) fetchWorkerAndRequests({ skipFullScreenLoading: true });
-    }, [session?.user?.id, fetchWorkerAndRequests])
+      if (landlordId) fetchRequests({ skipFullScreenLoading: true });
+    }, [landlordId, fetchRequests])
   );
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchWorkerAndRequests({ skipFullScreenLoading: true });
+    fetchRequests({ skipFullScreenLoading: true });
   };
-
-  async function markCompleted(requestId: string) {
-    setMarkingId(requestId);
-    try {
-      const { error } = await supabase
-        .from("maintenance_requests")
-        .update({ status: "completed", updated_at: new Date().toISOString() })
-        .eq("request_id", requestId);
-      if (error) throw error;
-      setRequests((prev) =>
-        prev.map((r) =>
-          r.request_id === requestId ? { ...r, status: "completed" } : r
-        )
-      );
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Could not update.";
-      Alert.alert("Error", msg);
-    } finally {
-      setMarkingId(null);
-    }
-  }
 
   const formatDate = (d: string | null) => {
     if (!d) return "—";
@@ -133,7 +109,7 @@ export default function MaintenanceDashboard() {
   );
   const displayList = activeTab === "uncompleted" ? uncompleted : completed;
 
-  if (!session?.user) {
+  if (!landlordId) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#6366f1" />
@@ -149,37 +125,8 @@ export default function MaintenanceDashboard() {
     );
   }
 
-  if (!maintenanceWorkerId) {
-    return (
-      <View style={styles.centered}>
-        <Text style={styles.emptyTitle}>No linked landlord</Text>
-        <Text style={styles.emptySubtitle}>
-          Your landlord needs to add you. Ask them to share their Landlord ID and create an account
-          with it.
-        </Text>
-        <TouchableOpacity
-          style={styles.signOutButton}
-          onPress={async () => {
-            await signOut();
-            router.replace("/");
-          }}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.signOutText}>Sign out</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>My requests</Text>
-        <Text style={styles.subtitle}>
-          {session.user.email}
-        </Text>
-      </View>
-
       <View style={styles.tabs}>
         <TouchableOpacity
           style={[styles.tab, activeTab === "uncompleted" && styles.tabActive]}
@@ -259,13 +206,20 @@ export default function MaintenanceDashboard() {
           <View style={styles.empty}>
             <Text style={styles.emptySubtitle}>
               {activeTab === "uncompleted"
-                ? "No uncompleted requests assigned to you."
-                : "No completed requests."}
+                ? "No uncompleted maintenance requests."
+                : "No completed maintenance requests."}
             </Text>
           </View>
         ) : (
           displayList.map((r) => (
-            <View key={r.request_id} style={styles.card}>
+            <TouchableOpacity
+              key={r.request_id}
+              style={styles.card}
+              onPress={() =>
+                router.push(`/landlord/maintenance-request-detail?requestId=${r.request_id}` as any)
+              }
+              activeOpacity={0.85}
+            >
               <View style={styles.cardHeader}>
                 <Text style={styles.cardTitle}>{r.title}</Text>
                 <Text
@@ -295,37 +249,9 @@ export default function MaintenanceDashboard() {
                   {r.description}
                 </Text>
               ) : null}
-              {activeTab === "uncompleted" && (
-                <TouchableOpacity
-                  style={[
-                    styles.completeButton,
-                    markingId === r.request_id && styles.completeButtonDisabled,
-                  ]}
-                  onPress={() => markCompleted(r.request_id)}
-                  disabled={markingId === r.request_id}
-                  activeOpacity={0.85}
-                >
-                  {markingId === r.request_id ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <Text style={styles.completeButtonText}>Mark completed</Text>
-                  )}
-                </TouchableOpacity>
-              )}
-            </View>
+            </TouchableOpacity>
           ))
         )}
-
-        <TouchableOpacity
-          style={styles.signOutButton}
-          onPress={async () => {
-            await signOut();
-            router.replace("/");
-          }}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.signOutText}>Sign out</Text>
-        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -341,24 +267,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#020617",
-    padding: 24,
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#1e293b",
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#f8fafc",
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "#94a3b8",
-    marginTop: 2,
   },
   tabs: {
     flexDirection: "row",
@@ -408,24 +316,15 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
-    paddingBottom: 40,
+    paddingBottom: 32,
   },
   empty: {
     alignItems: "center",
     paddingVertical: 48,
   },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#f8fafc",
-    marginBottom: 8,
-    textAlign: "center",
-  },
   emptySubtitle: {
     fontSize: 15,
     color: "#94a3b8",
-    textAlign: "center",
-    marginBottom: 24,
   },
   card: {
     backgroundColor: "#0f172a",
@@ -480,32 +379,5 @@ const styles = StyleSheet.create({
   cardDescription: {
     fontSize: 13,
     color: "#cbd5f5",
-  },
-  completeButton: {
-    backgroundColor: "#22c55e",
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: "center",
-    marginTop: 12,
-  },
-  completeButtonDisabled: {
-    opacity: 0.7,
-  },
-  completeButtonText: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  signOutButton: {
-    marginTop: 32,
-    paddingVertical: 14,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#475569",
-    borderRadius: 12,
-  },
-  signOutText: {
-    color: "#94a3b8",
-    fontSize: 16,
   },
 });
