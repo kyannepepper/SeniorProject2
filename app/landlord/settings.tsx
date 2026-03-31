@@ -1,17 +1,20 @@
-import { useEffect, useState } from "react";
+import { ThemeToggleRow } from "@/components/ThemeToggleRow";
+import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
+import { supabase } from "@/lib/supabase";
+import type { AppThemeColors } from "@/lib/theme";
+import { useRouter } from "expo-router";
+import { useEffect, useMemo, useState } from "react";
 import {
-  View,
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  ActivityIndicator,
-  Alert,
+  View,
 } from "react-native";
-import { useRouter } from "expo-router";
-import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
 
 type PreferredPaymentMethod =
   | "cash"
@@ -24,6 +27,8 @@ type PreferredPaymentMethod =
 
 export default function LandlordSettingsScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { session, landlordId, signOut } = useAuth();
   const userId = session?.user?.id ?? null;
 
@@ -72,21 +77,32 @@ export default function LandlordSettingsScreen() {
       }
     }
     loadProfile();
-  }, [userId, landlordId, session?.user?.email]);
+    // Intentionally omit session?.user?.email: saving payment prefs calls updateUser only when
+    // name/email changed; refetching on every auth email sync caused full-screen loading loops.
+  }, [userId, landlordId]);
 
   async function handleSave() {
     if (!userId || !landlordId) return;
     setSaving(true);
     try {
-      // Keep Supabase Auth user in sync (display name / email)
+      // Only touch Supabase Auth when profile identity changed. updateUser runs on every save
+      // otherwise and can appear to hang (especially around email changes), leaving the button
+      // spinner on forever for a simple payment-method update.
       const trimmedName = name.trim();
       const trimmedEmail = email.trim();
 
-      const { error: authError } = await supabase.auth.updateUser({
-        email: trimmedEmail || undefined,
-        data: { full_name: trimmedName || undefined },
-      });
-      if (authError) throw authError;
+      const emailChanged = trimmedEmail !== (session?.user?.email ?? "");
+      const metaName =
+        (session?.user?.user_metadata as { full_name?: string } | undefined)?.full_name ?? "";
+      const nameChanged = trimmedName !== metaName;
+
+      if (emailChanged || nameChanged) {
+        const { error: authError } = await supabase.auth.updateUser({
+          ...(emailChanged ? { email: trimmedEmail } : {}),
+          ...(nameChanged ? { data: { full_name: trimmedName || undefined } } : {}),
+        });
+        if (authError) throw authError;
+      }
 
       const { error: userError } = await supabase
         .from("users")
@@ -120,7 +136,7 @@ export default function LandlordSettingsScreen() {
   if (!userId || !landlordId || loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366f1" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -131,6 +147,9 @@ export default function LandlordSettingsScreen() {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
+        <Text style={styles.sectionTitle}>Appearance</Text>
+        <ThemeToggleRow />
+
         <Text style={styles.sectionTitle}>Profile</Text>
 
         <Text style={styles.label}>Full name</Text>
@@ -139,7 +158,7 @@ export default function LandlordSettingsScreen() {
           value={name}
           onChangeText={setName}
           placeholder="Your name"
-          placeholderTextColor="#64748b"
+          placeholderTextColor={colors.placeholder}
         />
 
         <Text style={styles.label}>Email</Text>
@@ -148,7 +167,7 @@ export default function LandlordSettingsScreen() {
           value={email}
           onChangeText={setEmail}
           placeholder="Email"
-          placeholderTextColor="#64748b"
+          placeholderTextColor={colors.placeholder}
           autoCapitalize="none"
           keyboardType="email-address"
         />
@@ -159,7 +178,7 @@ export default function LandlordSettingsScreen() {
           value={phone}
           onChangeText={setPhone}
           placeholder="Phone (optional)"
-          placeholderTextColor="#64748b"
+          placeholderTextColor={colors.placeholder}
           keyboardType="phone-pad"
         />
 
@@ -203,7 +222,7 @@ export default function LandlordSettingsScreen() {
           value={preferredPaymentDetails}
           onChangeText={setPreferredPaymentDetails}
           placeholder="e.g. Venmo handle, Cash App tag, Zelle phone/email, or instructions."
-          placeholderTextColor="#64748b"
+          placeholderTextColor={colors.placeholder}
         />
 
         <TouchableOpacity
@@ -213,7 +232,7 @@ export default function LandlordSettingsScreen() {
           activeOpacity={0.85}
         >
           {saving ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={colors.onPrimary} />
           ) : (
             <Text style={styles.primaryButtonText}>Save changes</Text>
           )}
@@ -234,97 +253,99 @@ export default function LandlordSettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#020617",
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#020617",
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#e5e7eb",
-    marginBottom: 8,
-    marginTop: 8,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#cbd5f5",
-    marginTop: 16,
-    marginBottom: 6,
-  },
-  input: {
-    backgroundColor: "#0f172a",
-    borderWidth: 1,
-    borderColor: "#1e293b",
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    fontSize: 16,
-    color: "#f8fafc",
-  },
-  multiline: {
-    minHeight: 80,
-    textAlignVertical: "top",
-  },
-  chipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "#1e293b",
-    backgroundColor: "#020617",
-  },
-  chipSelected: {
-    borderColor: "#6366f1",
-    backgroundColor: "#1e293b",
-  },
-  chipText: {
-    color: "#9ca3af",
-    fontSize: 13,
-  },
-  chipTextSelected: {
-    color: "#e5e7eb",
-    fontWeight: "600",
-  },
-  primaryButton: {
-    backgroundColor: "#6366f1",
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 32,
-  },
-  primaryButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  dangerButton: {
-    marginTop: 24,
-    alignItems: "center",
-  },
-  dangerButtonText: {
-    color: "#f97373",
-    fontSize: 15,
-    fontWeight: "500",
-  },
-});
+function createStyles(colors: AppThemeColors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bgSecondary,
+    },
+    centered: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.bgSecondary,
+    },
+    scrollContent: {
+      padding: 20,
+      paddingBottom: 40,
+    },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: "600",
+      color: colors.textSecondary,
+      marginBottom: 8,
+      marginTop: 8,
+    },
+    label: {
+      fontSize: 14,
+      fontWeight: "500",
+      color: colors.accentText,
+      marginTop: 16,
+      marginBottom: 6,
+    },
+    input: {
+      backgroundColor: colors.inputBg,
+      borderWidth: 1,
+      borderColor: colors.inputBorder,
+      borderRadius: 5,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      fontSize: 16,
+      color: colors.text,
+    },
+    multiline: {
+      minHeight: 80,
+      textAlignVertical: "top",
+    },
+    chipRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    chip: {
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.chipBorder,
+      backgroundColor: colors.chipBg,
+    },
+    chipSelected: {
+      borderColor: colors.primary,
+      backgroundColor: colors.chipSelectedBg,
+    },
+    chipText: {
+      color: colors.chipText,
+      fontSize: 13,
+    },
+    chipTextSelected: {
+      color: colors.chipTextSelected,
+      fontWeight: "600",
+    },
+    primaryButton: {
+      backgroundColor: colors.primary,
+      paddingVertical: 16,
+      borderRadius: 5,
+      alignItems: "center",
+      marginTop: 32,
+    },
+    primaryButtonText: {
+      color: colors.onPrimary,
+      fontSize: 16,
+      fontWeight: "600",
+    },
+    buttonDisabled: {
+      opacity: 0.7,
+    },
+    dangerButton: {
+      marginTop: 24,
+      alignItems: "center",
+    },
+    dangerButtonText: {
+      color: colors.dangerSoft,
+      fontSize: 15,
+      fontWeight: "500",
+    },
+  });
+}
 

@@ -1,15 +1,41 @@
-import { Stack } from "expo-router";
+import { useTheme } from "@/contexts/ThemeContext";
+import { Ionicons } from "@expo/vector-icons";
+import { Stack, useRouter } from "expo-router";
+import { useMemo } from "react";
+import { Pressable } from "react-native";
 
 export default function TenantLayout() {
+  const { colors } = useTheme();
+  const router = useRouter();
+  const screenOptions = useMemo(
+    () => ({
+      headerStyle: { backgroundColor: colors.primary },
+      headerTintColor: colors.onPrimary,
+      headerTitleStyle: { fontWeight: "600" as const, color: colors.onPrimary },
+      headerBackButtonDisplayMode: "minimal" as const,
+      headerBackTitleVisible: false,
+      headerBackVisible: false,
+      headerLeft: ({ canGoBack }: { canGoBack?: boolean }) =>
+        canGoBack ? (
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={10}
+            style={{ paddingHorizontal: 8, paddingVertical: 4, marginLeft: 0 }}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+          >
+            <Ionicons name="chevron-back" size={24} color={colors.onPrimary} />
+          </Pressable>
+        ) : null,
+    }),
+    [colors, router]
+  );
+
   return (
-    <Stack
-      screenOptions={{
-        headerStyle: { backgroundColor: "#0f172a" },
-        headerTintColor: "#f8fafc",
-        headerTitleStyle: { fontWeight: "600" },
-      }}
-    >
-      <Stack.Screen name="index" options={{ title: "Tenant Dashboard" }} />
+    <Stack screenOptions={screenOptions}>
+      <Stack.Screen name="index" options={{ headerShown: false }} />
+      <Stack.Screen name="settings" />
+      <Stack.Screen name="payment-history" />
     </Stack>
   );
 }

@@ -1,16 +1,19 @@
-import { useEffect, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
+import { panelElevation } from "@/lib/contrastScreenStyles";
+import type { AppThemeColors } from "@/lib/theme";
+import { supabase } from "@/lib/supabase";
+import * as Clipboard from "expo-clipboard";
+import { useEffect, useMemo, useState } from "react";
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
   ActivityIndicator,
   Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import * as Clipboard from "expo-clipboard";
-import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
 
 type LinkedWorker = {
   maintenance_worker_id: string;
@@ -18,8 +21,10 @@ type LinkedWorker = {
   email: string;
   created_at: string;
 };
-
+ 
 export default function LandlordMaintenanceWorkersScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { landlordId } = useAuth();
   const [workers, setWorkers] = useState<LinkedWorker[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,7 +80,7 @@ export default function LandlordMaintenanceWorkersScreen() {
   if (!landlordId) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366f1" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -83,7 +88,7 @@ export default function LandlordMaintenanceWorkersScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366f1" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -121,80 +126,88 @@ export default function LandlordMaintenanceWorkersScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#020617",
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
-    backgroundColor: "#020617",
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#e5e7eb",
-    marginBottom: 8,
-    marginTop: 16,
-  },
-  helperText: {
-    fontSize: 14,
-    color: "#94a3b8",
-    marginBottom: 16,
-  },
-  idCard: {
-    backgroundColor: "#0f172a",
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#1e293b",
-  },
-  idLabel: {
-    fontSize: 12,
-    color: "#64748b",
-    marginBottom: 4,
-  },
-  idValue: {
-    fontSize: 14,
-    color: "#f8fafc",
-    fontFamily: "monospace",
-    marginBottom: 12,
-  },
-  copyButton: {
-    backgroundColor: "#6366f1",
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    alignSelf: "flex-start",
-  },
-  copyButtonText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  emptyText: {
-    fontSize: 14,
-    color: "#94a3b8",
-  },
-  workerCard: {
-    backgroundColor: "#0f172a",
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: "#1e293b",
-  },
-  workerName: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#e5e7eb",
-  },
-  workerEmail: {
-    fontSize: 13,
-    color: "#94a3b8",
-    marginTop: 2,
-  },
-});
+function createStyles(colors: AppThemeColors) {
+  return StyleSheet.create({
+    centered: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.bgSecondary,
+    },
+    scrollContent: {
+      padding: 20,
+      paddingBottom: 40,
+      backgroundColor: colors.bgSecondary,
+    },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: "600",
+      color: colors.textSecondary,
+      marginBottom: 8,
+      marginTop: 16,
+    },
+    helperText: {
+      fontSize: 14,
+      color: colors.textMuted,
+      marginBottom: 16,
+    },
+    idCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 5,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderLeftWidth: 4,
+      borderLeftColor: colors.primary,
+      ...panelElevation(colors),
+    },
+    idLabel: {
+      fontSize: 12,
+      color: colors.textMuted,
+      marginBottom: 4,
+    },
+    idValue: {
+      fontSize: 14,
+      color: colors.text,
+      fontFamily: "monospace",
+      marginBottom: 12,
+    },
+    copyButton: {
+      backgroundColor: colors.primary,
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+      borderRadius: 5,
+      alignSelf: "flex-start",
+    },
+    copyButtonText: {
+      color: colors.onPrimary,
+      fontSize: 14,
+      fontWeight: "600",
+    },
+    emptyText: {
+      fontSize: 14,
+      color: colors.textMuted,
+    },
+    workerCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 5,
+      padding: 14,
+      marginBottom: 8,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderLeftWidth: 4,
+      borderLeftColor: colors.primary,
+      ...panelElevation(colors),
+    },
+    workerName: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: colors.textSecondary,
+    },
+    workerEmail: {
+      fontSize: 13,
+      color: colors.textMuted,
+      marginTop: 2,
+    },
+  });
+}

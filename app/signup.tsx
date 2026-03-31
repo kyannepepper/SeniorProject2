@@ -1,19 +1,23 @@
-import { useState } from "react";
+import type { UserRole } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
+import { createContrastScreenStyles } from "@/lib/contrastScreenStyles";
+import type { AppThemeColors } from "@/lib/theme";
+import { supabase } from "@/lib/supabase";
+import { useRouter } from "expo-router";
+import { useMemo, useState } from "react";
+import { BrandLogo } from "@/components/BrandLogo";
 import {
-  View,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-  ActivityIndicator,
-  ScrollView,
+  View,
 } from "react-native";
-import { useRouter } from "expo-router";
-import { supabase } from "@/lib/supabase";
-import type { UserRole } from "@/contexts/AuthContext";
 
 type RoleOption = { key: UserRole; label: string };
 
@@ -25,6 +29,9 @@ const ROLES: RoleOption[] = [
 
 export default function SignupScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
+  const base = useMemo(() => createContrastScreenStyles(colors), [colors]);
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [role, setRole] = useState<UserRole | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -64,7 +71,6 @@ export default function SignupScreen() {
       const userId = authData.user?.id;
       if (!userId) throw new Error("No user ID returned.");
 
-      // Insert into users table
       const { error: userError } = await supabase.from("users").insert({
         user_id: userId,
         role,
@@ -74,12 +80,16 @@ export default function SignupScreen() {
       });
       if (userError) throw userError;
 
-      // Insert into role-specific table
       if (role === "landlord") {
-        const { error: landlordError } = await supabase.from("landlords").insert({
-          user_id: userId,
-        });
+        const { data: landlordRow, error: landlordError } = await supabase
+          .from("landlords")
+          .upsert({ user_id: userId }, { onConflict: "user_id" })
+          .select("landlord_id, user_id")
+          .single();
         if (landlordError) throw landlordError;
+        if (!landlordRow?.landlord_id) {
+          throw new Error("Landlord record was not created.");
+        }
       } else if (role === "maintenance") {
         const { data: workerData, error: workerError } = await supabase
           .from("maintenance_workers")
@@ -95,16 +105,12 @@ export default function SignupScreen() {
           if (linkError) throw linkError;
         }
       } else if (role === "tenant") {
-        // Create a tenant row linked to this user. Other fields like property_id
-        // and lease_id will be filled when a landlord accepts an application.
         const { error: tenantError } = await supabase.from("tenants").insert({
           user_id: userId,
         });
         if (tenantError) throw tenantError;
       }
 
-      // Go back to the root so the welcome screen can redirect
-      // based on the new user's role (tenant, landlord, etc.).
       router.replace("/");
     } catch (error: unknown) {
       const err = error as { message?: string; details?: string };
@@ -120,17 +126,27 @@ export default function SignupScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={styles.container}
+      style={base.screen}
     >
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Create Account</Text>
-        <Text style={styles.subtitle}>Choose your account type</Text>
+        <View style={base.hero}>
+          <Text style={base.heroLabel}>CREATE ACCOUNT</Text>
+          <Text style={base.heroTitle}>Join Rent Squirrel</Text>
+          <Text style={base.heroTagline}>Pick your role, then add your details below.</Text>
+        </View>
 
-        <View style={styles.roleOptions}>
+        <View style={base.formPanel}>
+          <View style={styles.logoRow}>
+            <BrandLogo size={88} />
+          </View>
+          <Text style={styles.brandName}>Rent Squirrel</Text>
+          <Text style={styles.sectionHint}>Choose your account type</Text>
+
+          <View style={styles.roleOptions}>
           {ROLES.map((r) => (
             <TouchableOpacity
               key={r.key}
@@ -148,14 +164,14 @@ export default function SignupScreen() {
         <TextInput
           style={styles.input}
           placeholder="Full Name"
-          placeholderTextColor="#64748b"
+          placeholderTextColor={colors.placeholder}
           value={name}
           onChangeText={setName}
         />
         <TextInput
           style={styles.input}
           placeholder="Email"
-          placeholderTextColor="#64748b"
+          placeholderTextColor={colors.placeholder}
           value={email}
           onChangeText={setEmail}
           autoCapitalize="none"
@@ -165,7 +181,7 @@ export default function SignupScreen() {
         <TextInput
           style={styles.input}
           placeholder="Phone (optional)"
-          placeholderTextColor="#64748b"
+          placeholderTextColor={colors.placeholder}
           value={phone}
           onChangeText={setPhone}
           keyboardType="phone-pad"
@@ -174,7 +190,7 @@ export default function SignupScreen() {
           <TextInput
             style={styles.input}
             placeholder="Landlord ID (get this from your landlord)"
-            placeholderTextColor="#64748b"
+            placeholderTextColor={colors.placeholder}
             value={landlordId}
             onChangeText={setLandlordId}
             autoCapitalize="none"
@@ -184,7 +200,7 @@ export default function SignupScreen() {
         <TextInput
           style={styles.input}
           placeholder="Password (min 6 characters)"
-          placeholderTextColor="#64748b"
+          placeholderTextColor={colors.placeholder}
           value={password}
           onChangeText={setPassword}
           secureTextEntry
@@ -197,100 +213,107 @@ export default function SignupScreen() {
           activeOpacity={0.8}
         >
           {isLoading ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={colors.onPrimary} />
           ) : (
             <Text style={styles.buttonText}>Create Account</Text>
           )}
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-          disabled={isLoading}
-        >
-          <Text style={styles.backButtonText}>Back</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+            disabled={isLoading}
+          >
+            <Text style={styles.backButtonText}>Back</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#0f172a",
-  },
-  scrollContent: {
-    padding: 24,
-    paddingBottom: 48,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: "#f8fafc",
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: "#94a3b8",
-    marginBottom: 24,
-  },
-  roleOptions: {
-    gap: 12,
-    marginBottom: 24,
-  },
-  roleButton: {
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: "#1e293b",
-    borderWidth: 1,
-    borderColor: "#334155",
-  },
-  roleButtonSelected: {
-    borderColor: "#6366f1",
-    backgroundColor: "#1e1b4b",
-  },
-  roleLabel: {
-    fontSize: 16,
-    color: "#94a3b8",
-  },
-  roleLabelSelected: {
-    color: "#a5b4fc",
-    fontWeight: "600",
-  },
-  input: {
-    backgroundColor: "#1e293b",
-    borderWidth: 1,
-    borderColor: "#334155",
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    fontSize: 16,
-    color: "#f8fafc",
-    marginBottom: 16,
-  },
-  button: {
-    backgroundColor: "#6366f1",
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  buttonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  backButton: {
-    marginTop: 24,
-    alignItems: "center",
-  },
-  backButtonText: {
-    color: "#94a3b8",
-    fontSize: 14,
-  },
-});
+function createStyles(colors: AppThemeColors) {
+  return StyleSheet.create({
+    scrollContent: {
+      padding: 22,
+      paddingBottom: 48,
+    },
+    logoRow: {
+      alignItems: "center",
+      marginBottom: 8,
+    },
+    brandName: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: colors.primary,
+      marginBottom: 6,
+      textAlign: "center",
+    },
+    sectionHint: {
+      fontSize: 12,
+      fontWeight: "700",
+      letterSpacing: 0.8,
+      textTransform: "uppercase",
+      color: colors.textMuted,
+      marginBottom: 14,
+    },
+    roleOptions: {
+      gap: 12,
+      marginBottom: 24,
+    },
+    roleButton: {
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+      borderRadius: 5,
+      backgroundColor: colors.inputBg,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+    },
+    roleButtonSelected: {
+      borderColor: colors.primary,
+      backgroundColor: colors.selectedAccentBg,
+    },
+    roleLabel: {
+      fontSize: 16,
+      color: colors.textMuted,
+    },
+    roleLabelSelected: {
+      color: colors.accentText,
+      fontWeight: "600",
+    },
+    input: {
+      backgroundColor: colors.inputBg,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderRadius: 5,
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+      fontSize: 16,
+      color: colors.text,
+      marginBottom: 16,
+    },
+    button: {
+      backgroundColor: colors.primary,
+      paddingVertical: 16,
+      borderRadius: 5,
+      alignItems: "center",
+      marginTop: 8,
+    },
+    buttonDisabled: {
+      opacity: 0.7,
+    },
+    buttonText: {
+      color: colors.onPrimary,
+      fontSize: 16,
+      fontWeight: "700",
+    },
+    backButton: {
+      marginTop: 24,
+      alignItems: "center",
+    },
+    backButtonText: {
+      color: colors.textMuted,
+      fontSize: 14,
+    },
+  });
+}

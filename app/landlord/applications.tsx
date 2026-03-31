@@ -1,18 +1,22 @@
-import { useEffect, useState, useCallback } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
+import { panelElevation } from "@/lib/contrastScreenStyles";
+import type { AppThemeColors } from "@/lib/theme";
+import { supabase } from "@/lib/supabase";
+import { SearchBar } from "@/components/SearchBar";
+import { useFocusEffect } from "@react-navigation/native";
+import { useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  View,
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  ActivityIndicator,
-  RefreshControl,
+  View,
 } from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
-import { useRouter } from "expo-router";
-import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
 
 type Application = {
   application_id: string;
@@ -28,6 +32,8 @@ type Application = {
 };
 
 export default function LandlordApplicationsScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
   const { landlordId } = useAuth();
   const [applications, setApplications] = useState<Application[]>([]);
@@ -129,7 +135,7 @@ export default function LandlordApplicationsScreen() {
   if (!landlordId) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366f1" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -137,7 +143,7 @@ export default function LandlordApplicationsScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366f1" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -145,12 +151,11 @@ export default function LandlordApplicationsScreen() {
   return (
     <View style={styles.container}>
       {applications.length > 0 && (
-        <TextInput
-          style={styles.search}
-          placeholder="Search by applicant or property..."
-          placeholderTextColor="#64748b"
+        <SearchBar
           value={search}
           onChangeText={setSearch}
+          placeholder="Search by applicant or property..."
+          containerStyle={styles.searchBar}
         />
       )}
 
@@ -163,7 +168,7 @@ export default function LandlordApplicationsScreen() {
               setRefreshing(true);
               fetchApplications({ skipFullScreenLoading: true });
             }}
-            tintColor="#6366f1"
+            tintColor={colors.primary}
           />
         }
       >
@@ -211,87 +216,84 @@ export default function LandlordApplicationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#020617",
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#020617",
-  },
-  search: {
-    backgroundColor: "#0f172a",
-    borderWidth: 1,
-    borderColor: "#1e293b",
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    marginHorizontal: 20,
-    marginTop: 12,
-    marginBottom: 8,
-    fontSize: 16,
-    color: "#f8fafc",
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 32,
-  },
-  empty: {
-    alignItems: "center",
-    paddingVertical: 48,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#f8fafc",
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    fontSize: 15,
-    color: "#94a3b8",
-  },
-  card: {
-    backgroundColor: "#0f172a",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#1e293b",
-  },
-  cardName: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#f8fafc",
-    marginBottom: 4,
-  },
-  cardEmail: {
-    fontSize: 14,
-    color: "#94a3b8",
-    marginBottom: 4,
-  },
-  cardMeta: {
-    fontSize: 13,
-    color: "#64748b",
-    marginBottom: 2,
-  },
-  cardProperty: {
-    fontSize: 13,
-    color: "#a5b4fc",
-    marginTop: 6,
-    marginBottom: 4,
-  },
-  cardDescription: {
-    fontSize: 13,
-    color: "#94a3b8",
-    marginTop: 8,
-    fontStyle: "italic",
-  },
-  cardDate: {
-    fontSize: 12,
-    color: "#64748b",
-    marginTop: 8,
-  },
-});
+function createStyles(colors: AppThemeColors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bgSecondary,
+    },
+    centered: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.bgSecondary,
+    },
+    searchBar: {
+      marginHorizontal: 20,
+      marginTop: 12,
+      marginBottom: 8,
+    },
+    scrollContent: {
+      padding: 20,
+      paddingBottom: 32,
+    },
+    empty: {
+      alignItems: "center",
+      paddingVertical: 48,
+    },
+    emptyTitle: {
+      fontSize: 20,
+      fontWeight: "600",
+      color: colors.text,
+      marginBottom: 8,
+    },
+    emptySubtitle: {
+      fontSize: 15,
+      color: colors.textMuted,
+    },
+    card: {
+      backgroundColor: colors.surface,
+      borderRadius: 5,
+      padding: 16,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderLeftWidth: 4,
+      borderLeftColor: colors.primary,
+      ...panelElevation(colors),
+    },
+    cardName: {
+      fontSize: 18,
+      fontWeight: "600",
+      color: colors.text,
+      marginBottom: 4,
+    },
+    cardEmail: {
+      fontSize: 14,
+      color: colors.textMuted,
+      marginBottom: 4,
+    },
+    cardMeta: {
+      fontSize: 13,
+      color: colors.textMuted,
+      marginBottom: 2,
+    },
+    cardProperty: {
+      fontSize: 13,
+      color: colors.accentText,
+      marginTop: 6,
+      marginBottom: 4,
+    },
+    cardDescription: {
+      fontSize: 13,
+      color: colors.textMuted,
+      marginTop: 8,
+      fontStyle: "italic",
+    },
+    cardDate: {
+      fontSize: 12,
+      color: colors.textMuted,
+      marginTop: 8,
+    },
+  });
+}

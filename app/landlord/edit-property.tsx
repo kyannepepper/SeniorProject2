@@ -1,15 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
   ScrollView,
   ActivityIndicator,
   Alert,
   Image,
-  Switch,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
@@ -17,11 +15,15 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { decode } from "base64-arraybuffer";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
+import { createLandlordPropertyFormStyles } from "@/lib/landlordPropertyFormStyles";
 import { supabase } from "@/lib/supabase";
 
 const BUCKET = "property-photos";
 
 export default function EditPropertyScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createLandlordPropertyFormStyles(colors), [colors]);
   const router = useRouter();
   const { landlordId } = useAuth();
   const { propertyId } = useLocalSearchParams<{ propertyId?: string }>();
@@ -101,7 +103,7 @@ export default function EditPropertyScreen() {
       return;
     }
     const rent = rentAmount.trim() ? parseFloat(rentAmount.replace(/[^0-9.]/g, "")) : null;
-    if (rentAmount.trim() && (isNaN(rent) || rent < 0)) {
+    if (rentAmount.trim() && (rent == null || isNaN(rent) || rent < 0)) {
       Alert.alert("Invalid rent", "Please enter a valid rent amount.");
       return;
     }
@@ -139,7 +141,7 @@ export default function EditPropertyScreen() {
   if (!landlordId || !propertyId || loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366f1" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -154,52 +156,63 @@ export default function EditPropertyScreen() {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.label}>Property name</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. 123 Main St Unit A"
-          placeholderTextColor="#64748b"
-          value={name}
-          onChangeText={setName}
-        />
-
-        <Text style={styles.label}>Address</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Full street address"
-          placeholderTextColor="#64748b"
-          value={address}
-          onChangeText={setAddress}
-        />
-
-        <Text style={styles.label}>Rent amount (optional)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. 1200"
-          placeholderTextColor="#64748b"
-          value={rentAmount}
-          onChangeText={setRentAmount}
-          keyboardType="decimal-pad"
-        />
-
-        <View style={styles.row}>
-          <Text style={styles.label}>Occupied</Text>
-          <Switch
-            value={occupied}
-            onValueChange={setOccupied}
-            trackColor={{ false: "#334155", true: "#6366f1" }}
-            thumbColor="#f8fafc"
-          />
+        <View style={styles.hero}>
+          <Text style={styles.heroLabel}>EDIT LISTING</Text>
+          <Text style={styles.heroTitle}>Edit property</Text>
+          <Text style={styles.heroTagline}>
+            Update details or swap the listing photo — changes apply to your portfolio right away.
+          </Text>
         </View>
 
-        <Text style={styles.label}>Photo (optional)</Text>
-        <TouchableOpacity style={styles.photoButton} onPress={pickImage} activeOpacity={0.85}>
-          {imageUri ? (
-            <Image source={{ uri: imageUri }} style={styles.previewImage} />
-          ) : (
-            <Text style={styles.photoButtonText}>Tap to change photo</Text>
-          )}
-        </TouchableOpacity>
+        <Text style={styles.sectionLabel}>Property details</Text>
+        <View style={styles.card}>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Property name</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. 123 Main St Unit A"
+              placeholderTextColor={colors.placeholder}
+              value={name}
+              onChangeText={setName}
+            />
+          </View>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Address</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Full street address"
+              placeholderTextColor={colors.placeholder}
+              value={address}
+              onChangeText={setAddress}
+            />
+          </View>
+        </View>
+
+        <Text style={styles.sectionLabel}>Rent</Text>
+        <View style={styles.card}>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Monthly rent (optional)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. 1200"
+              placeholderTextColor={colors.placeholder}
+              value={rentAmount}
+              onChangeText={setRentAmount}
+              keyboardType="decimal-pad"
+            />
+          </View>
+        </View>
+
+        <Text style={styles.sectionLabel}>Photo</Text>
+        <View style={styles.photoCard}>
+          <TouchableOpacity style={styles.photoButton} onPress={pickImage} activeOpacity={0.85}>
+            {imageUri ? (
+              <Image source={{ uri: imageUri }} style={styles.previewImage} />
+            ) : (
+              <Text style={styles.photoButtonText}>Tap to add or change photo</Text>
+            )}
+          </TouchableOpacity>
+        </View>
 
         <TouchableOpacity
           style={[styles.saveButton, saving && styles.saveButtonDisabled]}
@@ -208,7 +221,7 @@ export default function EditPropertyScreen() {
           activeOpacity={0.85}
         >
           {saving ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={colors.onPrimary} />
           ) : (
             <Text style={styles.saveButtonText}>Save changes</Text>
           )}
@@ -217,81 +230,4 @@ export default function EditPropertyScreen() {
     </KeyboardAvoidingView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#020617",
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#020617",
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-  label: {
-    fontSize: 15,
-    fontWeight: "500",
-    color: "#e2e8f0",
-    marginBottom: 8,
-    marginTop: 16,
-  },
-  input: {
-    backgroundColor: "#0f172a",
-    borderWidth: 1,
-    borderColor: "#1e293b",
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    fontSize: 16,
-    color: "#f8fafc",
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 16,
-  },
-  photoButton: {
-    width: "100%",
-    height: 200,
-    backgroundColor: "#0f172a",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#1e293b",
-    borderStyle: "dashed",
-    marginTop: 8,
-    justifyContent: "center",
-    alignItems: "center",
-    overflow: "hidden",
-  },
-  previewImage: {
-    width: "100%",
-    height: "100%",
-    resizeMode: "cover",
-  },
-  photoButtonText: {
-    color: "#64748b",
-    fontSize: 15,
-  },
-  saveButton: {
-    backgroundColor: "#6366f1",
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 32,
-  },
-  saveButtonDisabled: {
-    opacity: 0.7,
-  },
-  saveButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-});
 

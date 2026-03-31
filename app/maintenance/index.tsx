@@ -1,22 +1,28 @@
-import { useEffect, useState, useCallback } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
+import { panelElevation } from "@/lib/contrastScreenStyles";
+import type { AppThemeColors } from "@/lib/theme";
+import { supabase } from "@/lib/supabase";
 import { useFocusEffect } from "@react-navigation/native";
+import { useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { StatusBar } from "expo-status-bar";
+import { Ionicons } from "@expo/vector-icons";
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
   ActivityIndicator,
   Alert,
-  RefreshControl,
   Image,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { useRouter } from "expo-router";
-import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type MaintenanceRequest = {
-  request_id: string;
+  request_id: string; 
   property_id: string;
   tenant_id: string;
   title: string;
@@ -29,8 +35,11 @@ type MaintenanceRequest = {
 };
 
 export default function MaintenanceDashboard() {
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
-  const { session, signOut } = useAuth();
+  const { session } = useAuth();
   const [maintenanceWorkerId, setMaintenanceWorkerId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"uncompleted" | "completed">("uncompleted");
   const [requests, setRequests] = useState<MaintenanceRequest[]>([]);
@@ -68,7 +77,7 @@ export default function MaintenanceDashboard() {
           .eq("maintenance_worker_id", mwId)
           .order("created_at", { ascending: false });
         if (error) throw error;
-        setRequests((data ?? []) as MaintenanceRequest[]);
+        setRequests((data ?? []) as unknown as MaintenanceRequest[]);
       } catch (e) {
         console.error("Error loading maintenance requests", e);
         setRequests([]);
@@ -136,7 +145,7 @@ export default function MaintenanceDashboard() {
   if (!session?.user) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366f1" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -144,40 +153,62 @@ export default function MaintenanceDashboard() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366f1" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   if (!maintenanceWorkerId) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.emptyTitle}>No linked landlord</Text>
-        <Text style={styles.emptySubtitle}>
-          Your landlord needs to add you. Ask them to share their Landlord ID and create an account
-          with it.
-        </Text>
-        <TouchableOpacity
-          style={styles.signOutButton}
-          onPress={async () => {
-            await signOut();
-            router.replace("/");
-          }}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.signOutText}>Sign out</Text>
-        </TouchableOpacity>
+      <View style={styles.container}>
+        <StatusBar style="light" />
+        <View style={[styles.header, { paddingTop: insets.top + 18 }]}>
+          <View style={styles.headerRow}>
+            <View style={styles.headerTitles}>
+              <Text style={styles.title}>My requests</Text>
+              <Text style={styles.subtitle}>{session.user.email}</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => router.push("/maintenance/settings" as any)}
+              activeOpacity={0.85}
+              style={styles.headerIconButton}
+              accessibilityRole="button"
+              accessibilityLabel="Settings"
+            >
+              <Ionicons name="settings-outline" size={22} color={colors.onPrimary} />
+            </TouchableOpacity>
+          </View>
+        </View>
+        <View style={styles.centered}>
+          <Text style={styles.emptyTitle}>No linked landlord</Text>
+          <Text style={styles.emptySubtitle}>
+            Your landlord needs to add you. Ask them to share their Landlord ID and create an account
+            with it.
+          </Text>
+        </View>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>My requests</Text>
-        <Text style={styles.subtitle}>
-          {session.user.email}
-        </Text>
+      <StatusBar style="light" />
+      <View style={[styles.header, { paddingTop: insets.top + 18 }]}>
+        <View style={styles.headerRow}>
+          <View style={styles.headerTitles}>
+            <Text style={styles.title}>My requests</Text>
+            <Text style={styles.subtitle}>{session.user.email}</Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => router.push("/maintenance/settings" as any)}
+            activeOpacity={0.85}
+            style={styles.headerIconButton}
+            accessibilityRole="button"
+            accessibilityLabel="Settings"
+          >
+            <Ionicons name="options-outline" size={22} color={colors.onPrimary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.tabs}>
@@ -251,7 +282,7 @@ export default function MaintenanceDashboard() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#6366f1"
+            tintColor={colors.primary}
           />
         }
       >
@@ -306,7 +337,7 @@ export default function MaintenanceDashboard() {
                   activeOpacity={0.85}
                 >
                   {markingId === r.request_id ? (
-                    <ActivityIndicator color="#fff" size="small" />
+                    <ActivityIndicator color={colors.onPrimary} size="small" />
                   ) : (
                     <Text style={styles.completeButtonText}>Mark completed</Text>
                   )}
@@ -315,197 +346,194 @@ export default function MaintenanceDashboard() {
             </View>
           ))
         )}
-
-        <TouchableOpacity
-          style={styles.signOutButton}
-          onPress={async () => {
-            await signOut();
-            router.replace("/");
-          }}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.signOutText}>Sign out</Text>
-        </TouchableOpacity>
       </ScrollView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#020617",
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#020617",
-    padding: 24,
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#1e293b",
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#f8fafc",
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "#94a3b8",
-    marginTop: 2,
-  },
-  tabs: {
-    flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: "#1e293b",
-    paddingHorizontal: 8,
-  },
-  tab: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 14,
-    gap: 6,
-  },
-  tabActive: {
-    borderBottomWidth: 2,
-    borderBottomColor: "#6366f1",
-  },
-  tabText: {
-    fontSize: 15,
-    fontWeight: "500",
-    color: "#94a3b8",
-  },
-  tabTextActive: {
-    color: "#f8fafc",
-    fontWeight: "600",
-  },
-  tabBadge: {
-    backgroundColor: "#334155",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    minWidth: 22,
-    alignItems: "center",
-  },
-  tabBadgeActive: {
-    backgroundColor: "#4338ca",
-  },
-  tabBadgeText: {
-    fontSize: 12,
-    color: "#94a3b8",
-    fontWeight: "600",
-  },
-  tabBadgeTextActive: {
-    color: "#fff",
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-  empty: {
-    alignItems: "center",
-    paddingVertical: 48,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#f8fafc",
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  emptySubtitle: {
-    fontSize: 15,
-    color: "#94a3b8",
-    textAlign: "center",
-    marginBottom: 24,
-  },
-  card: {
-    backgroundColor: "#0f172a",
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: "#1f2937",
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#e5e7eb",
-    flex: 1,
-    marginRight: 8,
-  },
-  cardProperty: {
-    fontSize: 13,
-    color: "#94a3b8",
-    marginBottom: 2,
-  },
-  statusBadge: {
-    fontSize: 11,
-    color: "#fefce8",
-    backgroundColor: "#f97316",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 999,
-  },
-  statusBadgeCompleted: {
-    backgroundColor: "#22c55e",
-    color: "#fff",
-  },
-  cardMeta: {
-    fontSize: 12,
-    color: "#64748b",
-    marginBottom: 4,
-  },
-  cardPhoto: {
-    width: "100%",
-    height: 160,
-    borderRadius: 8,
-    marginVertical: 6,
-    backgroundColor: "#1e293b",
-  },
-  cardDescription: {
-    fontSize: 13,
-    color: "#cbd5f5",
-  },
-  completeButton: {
-    backgroundColor: "#22c55e",
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: "center",
-    marginTop: 12,
-  },
-  completeButtonDisabled: {
-    opacity: 0.7,
-  },
-  completeButtonText: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  signOutButton: {
-    marginTop: 32,
-    paddingVertical: 14,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#475569",
-    borderRadius: 12,
-  },
-  signOutText: {
-    color: "#94a3b8",
-    fontSize: 16,
-  },
-});
+function createStyles(colors: AppThemeColors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bgSecondary,
+    },
+    centered: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.bgSecondary,
+      padding: 24,
+    },
+    header: {
+      paddingHorizontal: 20,
+      paddingTop: 8,
+      paddingBottom: 12,
+      backgroundColor: colors.primary,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    headerRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      gap: 12,
+    },
+    headerTitles: {
+      flex: 1,
+    },
+    headerIconButton: {
+      paddingHorizontal: 4,
+      paddingVertical: 4,
+    },
+    title: {
+      fontSize: 22,
+      fontWeight: "700",
+      color: colors.onPrimary,
+    },
+    subtitle: {
+      fontSize: 14,
+      color: colors.onPrimary,
+      opacity: 0.9,
+      marginTop: 2,
+    },
+    tabs: {
+      flexDirection: "row",
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      paddingHorizontal: 8,
+    },
+    tab: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 14,
+      gap: 6,
+    },
+    tabActive: {
+      borderBottomWidth: 2,
+      borderBottomColor: colors.tabIndicator,
+    },
+    tabText: {
+      fontSize: 15,
+      fontWeight: "500",
+      color: colors.tabInactive,
+    },
+    tabTextActive: {
+      color: colors.tabActive,
+      fontWeight: "600",
+    },
+    tabBadge: {
+      backgroundColor: colors.borderStrong,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 5,
+      minWidth: 22,
+      alignItems: "center",
+    },
+    tabBadgeActive: {
+      backgroundColor: colors.primaryPressed,
+    },
+    tabBadgeText: {
+      fontSize: 12,
+      color: colors.tabInactive,
+      fontWeight: "600",
+    },
+    tabBadgeTextActive: {
+      color: colors.onPrimary,
+    },
+    scrollContent: {
+      padding: 20,
+      paddingBottom: 40,
+    },
+    empty: {
+      alignItems: "center",
+      paddingVertical: 48,
+    },
+    emptyTitle: {
+      fontSize: 20,
+      fontWeight: "600",
+      color: colors.text,
+      marginBottom: 8,
+      textAlign: "center",
+    },
+    emptySubtitle: {
+      fontSize: 15,
+      color: colors.textMuted,
+      textAlign: "center",
+      marginBottom: 24,
+    },
+    card: {
+      backgroundColor: colors.surface,
+      borderRadius: 5,
+      padding: 14,
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderLeftWidth: 4,
+      borderLeftColor: colors.primary,
+      ...panelElevation(colors),
+    },
+    cardHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 4,
+    },
+    cardTitle: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: colors.textSecondary,
+      flex: 1,
+      marginRight: 8,
+    },
+    cardProperty: {
+      fontSize: 13,
+      color: colors.textMuted,
+      marginBottom: 2,
+    },
+    statusBadge: {
+      fontSize: 11,
+      color: colors.badgeUrgentText,
+      backgroundColor: colors.badgeUrgentBg,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 999,
+    },
+    statusBadgeCompleted: {
+      backgroundColor: colors.success,
+      color: colors.onPrimary,
+    },
+    cardMeta: {
+      fontSize: 12,
+      color: colors.textMuted,
+      marginBottom: 4,
+    },
+    cardPhoto: {
+      width: "100%",
+      height: 160,
+      borderRadius: 5,
+      marginVertical: 6,
+      backgroundColor: colors.border,
+    },
+    cardDescription: {
+      fontSize: 13,
+      color: colors.accentText,
+    },
+    completeButton: {
+      backgroundColor: colors.success,
+      paddingVertical: 12,
+      borderRadius: 5,
+      alignItems: "center",
+      marginTop: 12,
+    },
+    completeButtonDisabled: {
+      opacity: 0.7,
+    },
+    completeButtonText: {
+      color: colors.onPrimary,
+      fontSize: 15,
+      fontWeight: "600",
+    },
+  });
+}

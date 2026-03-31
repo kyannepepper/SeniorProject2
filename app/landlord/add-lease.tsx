@@ -1,21 +1,26 @@
-import { useEffect, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
+import { panelElevation } from "@/lib/contrastScreenStyles";
+import { supabase } from "@/lib/supabase";
+import type { AppThemeColors } from "@/lib/theme";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
   ActivityIndicator,
   Alert,
   Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
 
 export default function AddLeaseScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
   const { landlordId } = useAuth();
   const { tenantId } = useLocalSearchParams<{ tenantId?: string }>();
@@ -27,6 +32,8 @@ export default function AddLeaseScreen() {
   const [propertyAddress, setPropertyAddress] = useState("");
   const [landlordName, setLandlordName] = useState("");
   const [propertyId, setPropertyId] = useState<string | null>(null);
+  /** Property rent at load time; used to decide whether to sync `properties.rent_amount` on save */
+  const [propertyRentLoaded, setPropertyRentLoaded] = useState<number | null>(null);
 
   const [rentAmount, setRentAmount] = useState("");
   const [startDate, setStartDate] = useState<Date | null>(null);
@@ -34,6 +41,8 @@ export default function AddLeaseScreen() {
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [leaseDetailsText, setLeaseDetailsText] = useState("");
+  /** After user edits the lease body, stop overwriting until they tap Regenerate */
+  const leaseManuallyEditedRef = useRef(false);
 
   const formatDateForDisplay = (d: Date) =>
     d.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
@@ -59,7 +68,7 @@ export default function AddLeaseScreen() {
 
         const { data: prop, error: pError } = await supabase
           .from("properties")
-          .select("name, address, landlord_id")
+          .select("name, address, landlord_id, rent_amount")
           .eq("property_id", tid.property_id)
           .single();
         if (pError || !prop || (prop as { landlord_id: string }).landlord_id !== landlordId) {
@@ -67,9 +76,13 @@ export default function AddLeaseScreen() {
           router.back();
           return;
         }
-        const p = prop as { name: string; address: string };
+        const p = prop as { name: string; address: string; rent_amount: number | null };
         setPropertyName(p.name);
         setPropertyAddress(p.address);
+        const rawRent = p.rent_amount != null ? Number(p.rent_amount) : null;
+        const loadedRent = rawRent != null && !Number.isNaN(rawRent) ? rawRent : null;
+        setPropertyRentLoaded(loadedRent);
+        setRentAmount(loadedRent != null ? String(Number(p.rent_amount).toFixed(0)) : "");
 
         const { data: user } = await supabase
           .from("users")
@@ -102,15 +115,10 @@ export default function AddLeaseScreen() {
     load();
   }, [tenantId, landlordId, router]);
 
-  // Seed editable lease text when we have loaded names/property (template may still have placeholders until rent/dates are set)
-  useEffect(() => {
-    if (!loading && (tenantName || landlordName || propertyName)) {
-      setLeaseDetailsText((prev) => (prev === "" ? generateLeaseText() : prev));
-    }
-  }, [loading, tenantName, landlordName, propertyName, propertyAddress]);
-
-  function generateLeaseText() {
-    const rent = rentAmount.trim() ? `$${Number(rentAmount.replace(/[^0-9.]/g, "")) || 0}` : "[Rent amount]";
+  const generateLeaseText = useCallback(() => {
+    const rent = rentAmount.trim()
+      ? `$${Number(rentAmount.replace(/[^0-9.]/g, "")) || 0}`
+      : "[Rent amount]";
     const start = startDate ? formatDateForDisplay(startDate) : "[Start date]";
     const end = endDate ? formatDateForDisplay(endDate) : "[End date]";
     return `LEASE AGREEMENT
@@ -131,7 +139,15 @@ Landlord: _________________________   Date: __________
 Tenant:   _________________________   Date: __________
 
 [To be signed by both parties]`;
-  }
+  }, [rentAmount, startDate, endDate, tenantName, landlordName, propertyName, propertyAddress]);
+
+  // Keep the lease body in sync with rent + dates (and party/property names) until the user edits the text.
+  useEffect(() => {
+    if (loading) return;
+    if (!propertyName && !tenantName) return;
+    if (leaseManuallyEditedRef.current) return;
+    setLeaseDetailsText(generateLeaseText());
+  }, [loading, propertyName, tenantName, generateLeaseText]);
 
   async function handleSave() {
     if (!tenantId || !landlordId || !propertyId) return;
@@ -173,6 +189,21 @@ Tenant:   _________________________   Date: __________
         .eq("tenant_id", tenantId);
       if (updateError) throw updateError;
 
+      if (rent != null) {
+        const loaded = propertyRentLoaded;
+        const differs =
+          loaded === null ||
+          Number.isNaN(loaded) ||
+          Math.abs(loaded - rent) > 0.009;
+        if (differs) {
+          const { error: propRentError } = await supabase
+            .from("properties")
+            .update({ rent_amount: rent })
+            .eq("property_id", propertyId);
+          if (propRentError) throw propRentError;
+        }
+      }
+
       Alert.alert("Saved", "Lease created and linked to tenant.");
       router.replace("/landlord/leases");
     } catch (e) {
@@ -186,7 +217,7 @@ Tenant:   _________________________   Date: __________
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366f1" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -194,12 +225,16 @@ Tenant:   _________________________   Date: __________
   return (
     <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
       <Text style={styles.label}>Rent amount ($/month)</Text>
+      <Text style={styles.fieldHint}>
+        Pre-filled from the property listing. If you change it and save, the property rent will update
+        to match.
+      </Text>
       <TextInput
         style={styles.input}
         value={rentAmount}
         onChangeText={setRentAmount}
         placeholder="e.g. 1200"
-        placeholderTextColor="#64748b"
+        placeholderTextColor={colors.placeholder}
         keyboardType="decimal-pad"
       />
 
@@ -267,10 +302,16 @@ Tenant:   _________________________   Date: __________
       )}
 
       <Text style={styles.label}>Lease details</Text>
-      <Text style={styles.leaseHint}>Edit the lease text below. Use "Regenerate" to refresh from the template after changing rent or dates.</Text>
+      <Text style={styles.leaseHint}>
+        Rent, start date, and end date update this text automatically. If you edit the wording below,
+        changes to those fields will not overwrite your text until you tap Regenerate.
+      </Text>
       <TouchableOpacity
         style={styles.regenerateButton}
-        onPress={() => setLeaseDetailsText(generateLeaseText())}
+        onPress={() => {
+          leaseManuallyEditedRef.current = false;
+          setLeaseDetailsText(generateLeaseText());
+        }}
         activeOpacity={0.8}
       >
         <Text style={styles.regenerateButtonText}>Regenerate from template</Text>
@@ -278,9 +319,12 @@ Tenant:   _________________________   Date: __________
       <TextInput
         style={[styles.leaseTextInput, styles.leaseText]}
         value={leaseDetailsText}
-        onChangeText={setLeaseDetailsText}
+        onChangeText={(text) => {
+          leaseManuallyEditedRef.current = true;
+          setLeaseDetailsText(text);
+        }}
         placeholder="Lease agreement text..."
-        placeholderTextColor="#64748b"
+        placeholderTextColor={colors.placeholder}
         multiline
         textAlignVertical="top"
       />
@@ -292,7 +336,7 @@ Tenant:   _________________________   Date: __________
         activeOpacity={0.85}
       >
         {saving ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={colors.onPrimary} />
         ) : (
           <Text style={styles.saveButtonText}>Create lease</Text>
         )}
@@ -301,97 +345,107 @@ Tenant:   _________________________   Date: __________
   );
 }
 
-const styles = StyleSheet.create({
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#020617",
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
-    backgroundColor: "#020617",
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#cbd5f5",
-    marginTop: 16,
-    marginBottom: 6,
-  },
-  input: {
-    backgroundColor: "#0f172a",
-    borderWidth: 1,
-    borderColor: "#1e293b",
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    fontSize: 16,
-    color: "#f8fafc",
-  },
-  inputText: {
-    fontSize: 16,
-    color: "#f8fafc",
-  },
-  inputPlaceholder: {
-    fontSize: 16,
-    color: "#64748b",
-  },
-  datePickerDone: {
-    marginTop: 8,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  datePickerDoneText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#6366f1",
-  },
-  leaseHint: {
-    fontSize: 13,
-    color: "#94a3b8",
-    marginTop: 4,
-    marginBottom: 8,
-  },
-  regenerateButton: {
-    alignSelf: "flex-start",
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    marginBottom: 8,
-  },
-  regenerateButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#6366f1",
-  },
-  leaseTextInput: {
-    backgroundColor: "#0f172a",
-    borderWidth: 1,
-    borderColor: "#1e293b",
-    borderRadius: 12,
-    padding: 14,
-    marginTop: 0,
-    minHeight: 280,
-  },
-  leaseText: {
-    fontSize: 12,
-    color: "#cbd5f5",
-    lineHeight: 18,
-  },
-  saveButton: {
-    backgroundColor: "#6366f1",
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 24,
-  },
-  saveButtonDisabled: {
-    opacity: 0.7,
-  },
-  saveButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-});
+function createStyles(colors: AppThemeColors) {
+  return StyleSheet.create({
+    centered: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.bgSecondary,
+    },
+    scrollContent: {
+      padding: 20,
+      paddingBottom: 40,
+      backgroundColor: colors.bgSecondary,
+    },
+    label: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.accentText,
+      marginTop: 16,
+      marginBottom: 6,
+    },
+    fieldHint: {
+      fontSize: 13,
+      color: colors.textMuted,
+      marginBottom: 8,
+      lineHeight: 18,
+    },
+    input: {
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderRadius: 5,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      fontSize: 16,
+      color: colors.text,
+      ...panelElevation(colors),
+    },
+    inputText: {
+      fontSize: 16,
+      color: colors.text,
+    },
+    inputPlaceholder: {
+      fontSize: 16,
+      color: colors.placeholder,
+    },
+    datePickerDone: {
+      marginTop: 8,
+      paddingVertical: 12,
+      alignItems: "center",
+    },
+    datePickerDoneText: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: colors.primary,
+    },
+    leaseHint: {
+      fontSize: 13,
+      color: colors.textMuted,
+      marginTop: 4,
+      marginBottom: 8,
+    },
+    regenerateButton: {
+      alignSelf: "flex-start",
+      paddingVertical: 8,
+      paddingHorizontal: 14,
+      marginBottom: 8,
+    },
+    regenerateButtonText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.accentText,
+    },
+    leaseTextInput: {
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderRadius: 5,
+      padding: 14,
+      marginTop: 0,
+      minHeight: 280,
+      ...panelElevation(colors),
+    },
+    leaseText: {
+      fontSize: 12,
+      color: colors.accentText,
+      lineHeight: 18,
+    },
+    saveButton: {
+      backgroundColor: colors.primary,
+      paddingVertical: 16,
+      borderRadius: 5,
+      alignItems: "center",
+      marginTop: 24,
+    },
+    saveButtonDisabled: {
+      opacity: 0.7,
+    },
+    saveButtonText: {
+      color: colors.onPrimary,
+      fontSize: 16,
+      fontWeight: "600",
+    },
+  });
+}

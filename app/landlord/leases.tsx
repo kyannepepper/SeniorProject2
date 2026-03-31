@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,9 @@ import {
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
+import { panelElevation } from "@/lib/contrastScreenStyles";
+import type { AppThemeColors } from "@/lib/theme";
 import { supabase } from "@/lib/supabase";
 
 type TenantWithLease = {
@@ -34,6 +37,8 @@ type LeaseRow = {
 };
 
 export default function LandlordLeasesScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
   const { landlordId } = useAuth();
   const [tenants, setTenants] = useState<TenantWithLease[]>([]);
@@ -159,7 +164,7 @@ export default function LandlordLeasesScreen() {
   if (!landlordId || loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366f1" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -174,7 +179,7 @@ export default function LandlordLeasesScreen() {
             setRefreshing(true);
             fetchData({ skipFullScreenLoading: true });
           }}
-          tintColor="#6366f1"
+          tintColor={colors.primary}
         />
       }
     >
@@ -233,97 +238,102 @@ export default function LandlordLeasesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#020617",
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
-    backgroundColor: "#020617",
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#e5e7eb",
-    marginBottom: 12,
-  },
-  alertCard: {
-    backgroundColor: "#1e1b4b",
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: "#4338ca",
-  },
-  alertTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#e5e7eb",
-  },
-  alertSubtitle: {
-    fontSize: 14,
-    color: "#a5b4fc",
-    marginTop: 4,
-  },
-  alertProperty: {
-    fontSize: 13,
-    color: "#94a3b8",
-    marginTop: 4,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: "#94a3b8",
-  },
-  card: {
-    backgroundColor: "#0f172a",
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: "#1e293b",
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#e5e7eb",
-  },
-  cardProperty: {
-    fontSize: 14,
-    color: "#94a3b8",
-    marginTop: 4,
-  },
-  cardMeta: {
-    fontSize: 13,
-    color: "#64748b",
-    marginTop: 4,
-  },
-  cardRent: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#a5b4fc",
-    marginTop: 4,
-  },
-  badge: {
-    alignSelf: "flex-start",
-    marginTop: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    backgroundColor: "#334155",
-  },
-  badgeSigned: {
-    backgroundColor: "#166534",
-  },
-  badgeText: {
-    fontSize: 12,
-    color: "#e5e7eb",
-    fontWeight: "500",
-  },
-});
+function createStyles(colors: AppThemeColors) {
+  return StyleSheet.create({
+    centered: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.bgSecondary,
+    },
+    scrollContent: {
+      padding: 20,
+      paddingBottom: 40,
+      backgroundColor: colors.bgSecondary,
+    },
+    section: {
+      marginBottom: 24,
+    },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: "600",
+      color: colors.textSecondary,
+      marginBottom: 12,
+    },
+    alertCard: {
+      backgroundColor: colors.selectedAccentBg,
+      borderRadius: 5,
+      padding: 16,
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: colors.primaryPressed,
+    },
+    alertTitle: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: colors.textSecondary,
+    },
+    alertSubtitle: {
+      fontSize: 14,
+      color: colors.accentText,
+      marginTop: 4,
+    },
+    alertProperty: {
+      fontSize: 13,
+      color: colors.textMuted,
+      marginTop: 4,
+    },
+    emptyText: {
+      fontSize: 14,
+      color: colors.textMuted,
+    },
+    card: {
+      backgroundColor: colors.surface,
+      borderRadius: 5,
+      padding: 16,
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderLeftWidth: 4,
+      borderLeftColor: colors.primary,
+      ...panelElevation(colors),
+    },
+    cardTitle: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: colors.textSecondary,
+    },
+    cardProperty: {
+      fontSize: 14,
+      color: colors.textMuted,
+      marginTop: 4,
+    },
+    cardMeta: {
+      fontSize: 13,
+      color: colors.textMuted,
+      marginTop: 4,
+    },
+    cardRent: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: colors.accentText,
+      marginTop: 4,
+    },
+    badge: {
+      alignSelf: "flex-start",
+      marginTop: 8,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 5,
+      backgroundColor: colors.borderStrong,
+    },
+    badgeSigned: {
+      backgroundColor: colors.successBg,
+    },
+    badgeText: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      fontWeight: "500",
+    },
+  });
+}

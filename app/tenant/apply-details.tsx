@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -14,8 +14,13 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
+import { panelElevation } from "@/lib/contrastScreenStyles";
+import type { AppThemeColors } from "@/lib/theme";
 
 export default function TenantApplicationDetailsScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
   const { propertyId } = useLocalSearchParams<{ propertyId?: string }>();
   const { session, userRole } = useAuth();
@@ -166,7 +171,7 @@ export default function TenantApplicationDetailsScreen() {
   if (!propertyId || loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366f1" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -188,7 +193,7 @@ export default function TenantApplicationDetailsScreen() {
         value={fullName}
         onChangeText={setFullName}
         placeholder="Your full name"
-        placeholderTextColor="#64748b"
+        placeholderTextColor={colors.placeholder}
       />
 
       <Text style={styles.label}>Email</Text>
@@ -197,7 +202,7 @@ export default function TenantApplicationDetailsScreen() {
         value={email}
         onChangeText={setEmail}
         placeholder="Email"
-        placeholderTextColor="#64748b"
+        placeholderTextColor={colors.placeholder}
         autoCapitalize="none"
         keyboardType="email-address"
       />
@@ -208,7 +213,7 @@ export default function TenantApplicationDetailsScreen() {
         value={phone}
         onChangeText={setPhone}
         placeholder="Phone (optional)"
-        placeholderTextColor="#64748b"
+        placeholderTextColor={colors.placeholder}
         keyboardType="phone-pad"
       />
 
@@ -256,7 +261,7 @@ export default function TenantApplicationDetailsScreen() {
         value={message}
         onChangeText={setMessage}
         placeholder="Tell the landlord about yourself, your situation, and any questions."
-        placeholderTextColor="#64748b"
+        placeholderTextColor={colors.placeholder}
         multiline
         numberOfLines={4}
       />
@@ -281,14 +286,14 @@ export default function TenantApplicationDetailsScreen() {
             value={ref.name}
             onChangeText={(v) => updateReference(index, "name", v)}
             placeholder="Full name *"
-            placeholderTextColor="#64748b"
+            placeholderTextColor={colors.placeholder}
           />
           <TextInput
             style={styles.input}
             value={ref.phone}
             onChangeText={(v) => updateReference(index, "phone", v)}
             placeholder="Phone"
-            placeholderTextColor="#64748b"
+            placeholderTextColor={colors.placeholder}
             keyboardType="phone-pad"
           />
           <TextInput
@@ -296,7 +301,7 @@ export default function TenantApplicationDetailsScreen() {
             value={ref.email}
             onChangeText={(v) => updateReference(index, "email", v)}
             placeholder="Email"
-            placeholderTextColor="#64748b"
+            placeholderTextColor={colors.placeholder}
             autoCapitalize="none"
             keyboardType="email-address"
           />
@@ -305,7 +310,7 @@ export default function TenantApplicationDetailsScreen() {
             value={ref.relationship}
             onChangeText={(v) => updateReference(index, "relationship", v)}
             placeholder="Relationship (e.g. employer, landlord)"
-            placeholderTextColor="#64748b"
+            placeholderTextColor={colors.placeholder}
           />
         </View>
       ))}
@@ -322,7 +327,7 @@ export default function TenantApplicationDetailsScreen() {
         activeOpacity={0.85}
       >
         {submitting ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={colors.onPrimary} />
         ) : (
           <Text style={styles.submitButtonText}>Submit application</Text>
         )}
@@ -331,147 +336,157 @@ export default function TenantApplicationDetailsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#020617",
-  },
-  scroll: {
-    padding: 20,
-    paddingBottom: 40,
-    backgroundColor: "#020617",
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#f8fafc",
-    marginBottom: 12,
-  },
-  selectedSummary: {
-    backgroundColor: "#0f172a",
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#1e293b",
-    marginBottom: 16,
-  },
-  selectedSummaryLabel: {
-    fontSize: 12,
-    color: "#94a3b8",
-    marginBottom: 4,
-  },
-  propertyName: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#f8fafc",
-  },
-  propertyAddress: {
-    fontSize: 14,
-    color: "#94a3b8",
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#e5e7eb",
-    marginTop: 8,
-    marginBottom: 8,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#cbd5f5",
-    marginTop: 16,
-    marginBottom: 6,
-  },
-  input: {
-    backgroundColor: "#0f172a",
-    borderWidth: 1,
-    borderColor: "#1e293b",
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    fontSize: 16,
-    color: "#f8fafc",
-  },
-  inputText: {
-    fontSize: 16,
-    color: "#f8fafc",
-  },
-  inputPlaceholder: {
-    fontSize: 16,
-    color: "#64748b",
-  },
-  datePickerDone: {
-    marginTop: 8,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  datePickerDoneText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#6366f1",
-  },
-  multiline: {
-    minHeight: 90,
-    textAlignVertical: "top",
-  },
-  referenceBlock: {
-    marginTop: 16,
-    padding: 14,
-    backgroundColor: "#0f172a",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#1e293b",
-  },
-  referenceBlockHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  referenceLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#e5e7eb",
-  },
-  removeRefButton: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-  },
-  removeRefText: {
-    fontSize: 13,
-    color: "#f87171",
-  },
-  addRefButton: {
-    marginTop: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#334155",
-    borderRadius: 12,
-    borderStyle: "dashed",
-  },
-  addRefText: {
-    color: "#94a3b8",
-    fontSize: 15,
-    fontWeight: "500",
-  },
-  submitButton: {
-    backgroundColor: "#6366f1",
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 28,
-  },
-  submitButtonDisabled: {
-    opacity: 0.7,
-  },
-  submitButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-});
+function createStyles(colors: AppThemeColors) {
+  return StyleSheet.create({
+    centered: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.bgSecondary,
+    },
+    scroll: {
+      padding: 20,
+      paddingBottom: 40,
+      backgroundColor: colors.bgSecondary,
+    },
+    title: {
+      fontSize: 24,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 12,
+    },
+    selectedSummary: {
+      backgroundColor: colors.surface,
+      borderRadius: 5,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderLeftWidth: 4,
+      borderLeftColor: colors.primary,
+      marginBottom: 16,
+      ...panelElevation(colors),
+    },
+    selectedSummaryLabel: {
+      fontSize: 12,
+      color: colors.textMuted,
+      marginBottom: 4,
+    },
+    propertyName: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: colors.text,
+    },
+    propertyAddress: {
+      fontSize: 14,
+      color: colors.textMuted,
+    },
+    sectionTitle: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: colors.textSecondary,
+      marginTop: 8,
+      marginBottom: 8,
+    },
+    label: {
+      fontSize: 14,
+      fontWeight: "500",
+      color: colors.accentText,
+      marginTop: 16,
+      marginBottom: 6,
+    },
+    input: {
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderRadius: 5,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      fontSize: 16,
+      color: colors.text,
+      ...panelElevation(colors),
+    },
+    inputText: {
+      fontSize: 16,
+      color: colors.text,
+    },
+    inputPlaceholder: {
+      fontSize: 16,
+      color: colors.placeholder,
+    },
+    datePickerDone: {
+      marginTop: 8,
+      paddingVertical: 12,
+      alignItems: "center",
+    },
+    datePickerDoneText: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: colors.primary,
+    },
+    multiline: {
+      minHeight: 90,
+      textAlignVertical: "top",
+    },
+    referenceBlock: {
+      marginTop: 16,
+      padding: 14,
+      backgroundColor: colors.surface,
+      borderRadius: 5,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderLeftWidth: 4,
+      borderLeftColor: colors.primary,
+      ...panelElevation(colors),
+    },
+    referenceBlockHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 10,
+    },
+    referenceLabel: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.textSecondary,
+    },
+    removeRefButton: {
+      paddingVertical: 4,
+      paddingHorizontal: 8,
+    },
+    removeRefText: {
+      fontSize: 13,
+      color: colors.danger,
+    },
+    addRefButton: {
+      marginTop: 12,
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderRadius: 999,
+      borderStyle: "dashed",
+    },
+    addRefText: {
+      color: colors.textMuted,
+      fontSize: 15,
+      fontWeight: "500",
+    },
+    submitButton: {
+      backgroundColor: colors.primary,
+      paddingVertical: 16,
+      borderRadius: 5,
+      alignItems: "center",
+      marginTop: 28,
+    },
+    submitButtonDisabled: {
+      opacity: 0.7,
+    },
+    submitButtonText: {
+      color: colors.onPrimary,
+      fontSize: 16,
+      fontWeight: "600",
+    },
+  });
+}
 

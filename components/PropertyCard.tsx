@@ -1,5 +1,9 @@
-import { View, Text, Image, StyleSheet, TouchableOpacity } from "react-native";
+import { useTheme } from "@/contexts/ThemeContext";
+import type { AppThemeColors } from "@/lib/theme";
+import { LinearGradient } from "expo-linear-gradient";
 import type { ReactNode } from "react";
+import { useMemo } from "react";
+import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export type PropertyCardProps = {
   name: string;
@@ -13,39 +17,47 @@ export type PropertyCardProps = {
 
 export function PropertyCard({
   name,
-  address,
+  address: _address,
   rentAmount,
-  occupied,
+  occupied: _occupied,
   imageUrl,
   onPress,
   footer,
 }: PropertyCardProps) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  const rentLabel =
+    rentAmount != null ? `$${Number(rentAmount).toFixed(0)}/mo` : "—";
+
   return (
     <TouchableOpacity
-      style={styles.card}
+      style={styles.cardShadow}
       activeOpacity={0.9}
       onPress={onPress}
       disabled={!onPress}
     >
-      {imageUrl ? (
-        <Image source={{ uri: imageUrl }} style={styles.cardImage} />
-      ) : (
-        <View style={styles.cardImagePlaceholder}>
-          <Text style={styles.cardImagePlaceholderText}>No photo</Text>
-        </View>
-      )}
-      <View style={styles.cardBody}>
-        <Text style={styles.cardName}>{name}</Text>
-        <Text style={styles.cardAddress} numberOfLines={1}>
-          {address}
-        </Text>
-        <View style={styles.cardRow}>
-          <Text style={styles.cardRent}>
-            ${rentAmount != null ? Number(rentAmount).toFixed(0) : "—"}/mo
-          </Text>
-          <Text style={[styles.badge, occupied && styles.badgeOccupied]}>
-            {occupied ? "Occupied" : "Available"}
-          </Text>
+      <View style={styles.card}>
+        <View style={styles.media}>
+          {imageUrl ? (
+            <Image source={{ uri: imageUrl }} style={styles.cardImage} />
+          ) : (
+            <View style={styles.cardImagePlaceholder}>
+              <Text style={styles.cardImagePlaceholderText}>No photo</Text>
+            </View>
+          )}
+          <LinearGradient
+            colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.88)"]}
+            locations={[0.25, 1]}
+            style={styles.gradient}
+            pointerEvents="none"
+          />
+          <View style={styles.overlayText} pointerEvents="none">
+            <Text style={styles.cardName} numberOfLines={2}>
+              {name}
+            </Text>
+            <Text style={styles.cardRent}>{rentLabel}</Text>
+          </View>
         </View>
         {footer}
       </View>
@@ -53,62 +65,70 @@ export function PropertyCard({
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: "#0f172a",
-    borderRadius: 16,
-    overflow: "hidden",
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#1e293b",
-  },
-  cardImage: {
-    width: "100%",
-    height: 160,
-    backgroundColor: "#1e293b",
-  },
-  cardImagePlaceholder: {
-    width: "100%",
-    height: 160,
-    backgroundColor: "#1e293b",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  cardImagePlaceholderText: {
-    color: "#64748b",
-    fontSize: 14,
-  },
-  cardBody: {
-    padding: 16,
-  },
-  cardName: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#f8fafc",
-    marginBottom: 4,
-  },
-  cardAddress: {
-    fontSize: 14,
-    color: "#94a3b8",
-    marginBottom: 8,
-  },
-  cardRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  cardRent: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#a5b4fc",
-  },
-  badge: {
-    fontSize: 12,
-    color: "#22c55e",
-    fontWeight: "500",
-  },
-  badgeOccupied: {
-    color: "#f59e0b",
-  },
-});
-
+function createStyles(colors: AppThemeColors) {
+  return StyleSheet.create({
+    cardShadow: {
+      marginBottom: 12,
+      borderRadius: 30,
+      backgroundColor: colors.surface,
+      shadowColor: "rgba(0, 0, 0, 0.84)",
+      shadowOffset: { width: 2, height: 3 },
+      shadowOpacity: 0.3,
+      shadowRadius: 10,
+      elevation: 3,
+    },
+    card: {
+      backgroundColor: colors.surface,
+      borderRadius: 30,
+      overflow: "hidden",
+    },
+    media: {
+      width: "100%",
+      height: 300,
+      position: "relative",
+      
+    },
+    cardImage: {
+      ...StyleSheet.absoluteFillObject,
+      width: "100%",
+      height: "100%",
+      backgroundColor: colors.border,
+    },
+    cardImagePlaceholder: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: colors.bgSecondary,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    cardImagePlaceholderText: {
+      color: colors.placeholder,
+      fontSize: 14,
+    },
+    gradient: {
+      ...StyleSheet.absoluteFillObject,
+    },
+    overlayText: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      bottom: 0,
+      paddingHorizontal: 16,
+      paddingBottom: 16,
+      paddingTop: 28,
+    },
+    cardName: {
+      fontSize: 19,
+      fontWeight: "700",
+      color: "#ffffff",
+      marginBottom: 4,
+      textShadowColor: "rgba(0,0,0,0.45)",
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 4,
+    },
+    cardRent: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: "rgba(255,255,255,0.92)",
+    },
+  });
+}

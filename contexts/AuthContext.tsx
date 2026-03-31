@@ -8,6 +8,7 @@ type AuthContextType = {
   session: Session | null;
   userRole: UserRole | null;
   landlordId: string | null;
+  tenantId: string | null;
   isLoading: boolean;
   signOut: () => Promise<void>;
 };
@@ -18,6 +19,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [landlordId, setLandlordId] = useState<string | null>(null);
+  const [tenantId, setTenantId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -34,6 +36,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setUserRole(null);
         setLandlordId(null);
+        setTenantId(null);
         setIsLoading(false);
       }
     });
@@ -51,6 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setUserRole(null);
         setLandlordId(null);
+        setTenantId(null);
       }
       setIsLoading(false);
     });
@@ -59,11 +63,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   async function fetchUserRole(userId: string) {
-    const { data: user } = await supabase
+    const { data: user, error } = await supabase
       .from("users")
       .select("role")
       .eq("user_id", userId)
       .single();
+    if (error) {
+      console.warn("fetchUserRole: users select failed", error);
+      return;
+    }
     // If there's no row/role yet (race with signup insert), keep whatever role we already had.
     if (!user || !user.role) {
       return;
@@ -71,14 +79,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const role = user.role as UserRole;
     setUserRole(role);
     if (role === "landlord") {
-      const { data: landlord } = await supabase
+      const { data: landlord, error: landlordSelectError } = await supabase
         .from("landlords")
         .select("landlord_id")
         .eq("user_id", userId)
-        .single();
+        .maybeSingle();
+      if (landlordSelectError) {
+        console.warn("landlords select failed", landlordSelectError);
+      }
+
       setLandlordId(landlord?.landlord_id ?? null);
+      setTenantId(null);
+    } else if (role === "tenant") {
+      const { data: tenant, error: tenantError } = await supabase
+        .from("tenants")
+        .select("tenant_id")
+        .eq("user_id", userId)
+        .single();
+      if (tenantError) {
+        console.warn("fetchUserRole: tenants select failed", tenantError);
+      }
+      setTenantId(tenant?.tenant_id ?? null);
+      setLandlordId(null);
     } else {
       setLandlordId(null);
+      setTenantId(null);
     }
   }
 
@@ -86,6 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSession(null);
     setUserRole(null);
     setLandlordId(null);
+    setTenantId(null);
     try {
       await supabase.auth.signOut();
     } catch {
@@ -94,7 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ session, userRole, landlordId, isLoading, signOut }}>
+    <AuthContext.Provider value={{ session, userRole, landlordId, tenantId, isLoading, signOut }}>
       {children}
     </AuthContext.Provider>
   );

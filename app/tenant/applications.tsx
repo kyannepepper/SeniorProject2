@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,9 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
+import { panelElevation } from "@/lib/contrastScreenStyles";
+import type { AppThemeColors } from "@/lib/theme";
 import { supabase } from "@/lib/supabase";
 
 type Application = {
@@ -23,6 +26,8 @@ type Application = {
 };
 
 export default function TenantApplicationsScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { session } = useAuth();
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,7 +105,7 @@ export default function TenantApplicationsScreen() {
   if (!session?.user || loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366f1" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -143,65 +148,70 @@ export default function TenantApplicationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#020617",
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#020617",
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 32,
-  },
-  empty: {
-    alignItems: "center",
-    paddingVertical: 48,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#f8fafc",
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    fontSize: 15,
-    color: "#94a3b8",
-    textAlign: "center",
-    paddingHorizontal: 16,
-  },
-  card: {
-    backgroundColor: "#0f172a",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#1e293b",
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#e5e7eb",
-    marginBottom: 4,
-  },
-  cardAddress: {
-    fontSize: 13,
-    color: "#94a3b8",
-    marginBottom: 4,
-  },
-  cardMeta: {
-    fontSize: 12,
-    color: "#64748b",
-    marginTop: 2,
-  },
-  cardDescription: {
-    fontSize: 13,
-    color: "#cbd5f5",
-    marginTop: 8,
-  },
-});
+function createStyles(colors: AppThemeColors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bgSecondary,
+    },
+    centered: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.bgSecondary,
+    },
+    scrollContent: {
+      padding: 20,
+      paddingBottom: 32,
+    },
+    empty: {
+      alignItems: "center",
+      paddingVertical: 48,
+    },
+    emptyTitle: {
+      fontSize: 20,
+      fontWeight: "600",
+      color: colors.text,
+      marginBottom: 8,
+    },
+    emptySubtitle: {
+      fontSize: 15,
+      color: colors.textMuted,
+      textAlign: "center",
+      paddingHorizontal: 16,
+    },
+    card: {
+      backgroundColor: colors.surface,
+      borderRadius: 5,
+      padding: 16,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderLeftWidth: 4,
+      borderLeftColor: colors.primary,
+      ...panelElevation(colors),
+    },
+    cardTitle: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: colors.textSecondary,
+      marginBottom: 4,
+    },
+    cardAddress: {
+      fontSize: 13,
+      color: colors.textMuted,
+      marginBottom: 4,
+    },
+    cardMeta: {
+      fontSize: 12,
+      color: colors.textMuted,
+      marginTop: 2,
+    },
+    cardDescription: {
+      fontSize: 13,
+      color: colors.accentText,
+      marginTop: 8,
+    },
+  });
+}
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,9 @@ import {
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
+import { panelElevation } from "@/lib/contrastScreenStyles";
+import type { AppThemeColors } from "@/lib/theme";
 import { supabase } from "@/lib/supabase";
 
 type MaintenanceRequest = {
@@ -30,6 +33,8 @@ type MaintenanceRequest = {
 const BUCKET = "maintenance-photos";
 
 export default function TenantMaintenanceRequestsScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { session } = useAuth();
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [propertyId, setPropertyId] = useState<string | null>(null);
@@ -176,7 +181,7 @@ export default function TenantMaintenanceRequestsScreen() {
   if (!session?.user || loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366f1" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -204,7 +209,7 @@ export default function TenantMaintenanceRequestsScreen() {
         value={title}
         onChangeText={setTitle}
         placeholder="Short summary (e.g. 'Leaky faucet in kitchen')"
-        placeholderTextColor="#64748b"
+        placeholderTextColor={colors.placeholder}
       />
 
       <Text style={styles.label}>Urgency</Text>
@@ -243,7 +248,7 @@ export default function TenantMaintenanceRequestsScreen() {
         value={description}
         onChangeText={setDescription}
         placeholder="Describe the problem and when you noticed it."
-        placeholderTextColor="#64748b"
+        placeholderTextColor={colors.placeholder}
         multiline
         numberOfLines={4}
       />
@@ -255,7 +260,7 @@ export default function TenantMaintenanceRequestsScreen() {
         activeOpacity={0.85}
       >
         {submitting ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={colors.onPrimary} />
         ) : (
           <Text style={styles.submitButtonText}>Submit request</Text>
         )}
@@ -296,184 +301,191 @@ export default function TenantMaintenanceRequestsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#020617",
-    padding: 24,
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 32,
-    backgroundColor: "#020617",
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#f8fafc",
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "#94a3b8",
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#cbd5f5",
-    marginTop: 16,
-    marginBottom: 6,
-  },
-  input: {
-    backgroundColor: "#0f172a",
-    borderWidth: 1,
-    borderColor: "#1e293b",
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    fontSize: 16,
-    color: "#f8fafc",
-  },
-  multiline: {
-    minHeight: 90,
-    textAlignVertical: "top",
-  },
-  urgencyRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 4,
-  },
-  urgencyChip: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    backgroundColor: "#1e293b",
-    borderWidth: 1,
-    borderColor: "#334155",
-  },
-  urgencyChipActive: {
-    backgroundColor: "#4338ca",
-    borderColor: "#6366f1",
-  },
-  urgencyChipText: {
-    fontSize: 14,
-    color: "#94a3b8",
-  },
-  urgencyChipTextActive: {
-    color: "#fff",
-    fontWeight: "600",
-  },
-  photoButton: {
-    backgroundColor: "#0f172a",
-    borderWidth: 1,
-    borderColor: "#1e293b",
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 80,
-  },
-  photoButtonText: {
-    fontSize: 15,
-    color: "#94a3b8",
-  },
-  photoPreview: {
-    width: 80,
-    height: 80,
-    borderRadius: 10,
-  },
-  removePhoto: {
-    marginTop: 6,
-    alignSelf: "flex-start",
-  },
-  removePhotoText: {
-    fontSize: 13,
-    color: "#f87171",
-  },
-  cardPhoto: {
-    width: "100%",
-    height: 160,
-    borderRadius: 8,
-    marginVertical: 6,
-    backgroundColor: "#1e293b",
-  },
-  submitButton: {
-    backgroundColor: "#6366f1",
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 24,
-  },
-  submitButtonDisabled: {
-    opacity: 0.7,
-  },
-  submitButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  listSection: {
-    marginTop: 32,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#e5e7eb",
-    marginBottom: 12,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#f8fafc",
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  emptySubtitle: {
-    fontSize: 15,
-    color: "#94a3b8",
-    textAlign: "center",
-  },
-  card: {
-    backgroundColor: "#0f172a",
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: "#1f2937",
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#e5e7eb",
-    flex: 1,
-    marginRight: 8,
-  },
-  statusBadge: {
-    fontSize: 11,
-    color: "#fefce8",
-    backgroundColor: "#f97316",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 999,
-    overflow: "hidden",
-  },
-  cardMeta: {
-    fontSize: 12,
-    color: "#64748b",
-    marginBottom: 4,
-  },
-  cardDescription: {
-    fontSize: 13,
-    color: "#cbd5f5",
-  },
-});
+function createStyles(colors: AppThemeColors) {
+  return StyleSheet.create({
+    centered: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.bgSecondary,
+      padding: 24,
+    },
+    scrollContent: {
+      padding: 20,
+      paddingBottom: 32,
+      backgroundColor: colors.bgSecondary,
+    },
+    title: {
+      fontSize: 22,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 4,
+    },
+    subtitle: {
+      fontSize: 14,
+      color: colors.textMuted,
+      marginBottom: 16,
+    },
+    label: {
+      fontSize: 14,
+      fontWeight: "500",
+      color: colors.accentText,
+      marginTop: 16,
+      marginBottom: 6,
+    },
+    input: {
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderRadius: 5,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      fontSize: 16,
+      color: colors.text,
+      ...panelElevation(colors),
+    },
+    multiline: {
+      minHeight: 90,
+      textAlignVertical: "top",
+    },
+    urgencyRow: {
+      flexDirection: "row",
+      gap: 8,
+      marginBottom: 4,
+    },
+    urgencyChip: {
+      paddingVertical: 8,
+      paddingHorizontal: 14,
+      borderRadius: 5,
+      backgroundColor: colors.chipBg,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+    },
+    urgencyChipActive: {
+      backgroundColor: colors.primaryPressed,
+      borderColor: colors.accentBorder,
+    },
+    urgencyChipText: {
+      fontSize: 14,
+      color: colors.chipText,
+    },
+    urgencyChipTextActive: {
+      color: colors.onPrimary,
+      fontWeight: "600",
+    },
+    photoButton: {
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderRadius: 5,
+      paddingVertical: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      minHeight: 80,
+      ...panelElevation(colors),
+    },
+    photoButtonText: {
+      fontSize: 15,
+      color: colors.textMuted,
+    },
+    photoPreview: {
+      width: 80,
+      height: 80,
+      borderRadius: 5,
+    },
+    removePhoto: {
+      marginTop: 6,
+      alignSelf: "flex-start",
+    },
+    removePhotoText: {
+      fontSize: 13,
+      color: colors.danger,
+    },
+    cardPhoto: {
+      width: "100%",
+      height: 160,
+      borderRadius: 5,
+      marginVertical: 6,
+      backgroundColor: colors.border,
+    },
+    submitButton: {
+      backgroundColor: colors.primary,
+      paddingVertical: 16,
+      borderRadius: 5,
+      alignItems: "center",
+      marginTop: 24,
+    },
+    submitButtonDisabled: {
+      opacity: 0.7,
+    },
+    submitButtonText: {
+      color: colors.onPrimary,
+      fontSize: 16,
+      fontWeight: "600",
+    },
+    listSection: {
+      marginTop: 32,
+    },
+    sectionTitle: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: colors.textSecondary,
+      marginBottom: 12,
+    },
+    emptyTitle: {
+      fontSize: 20,
+      fontWeight: "600",
+      color: colors.text,
+      marginBottom: 8,
+      textAlign: "center",
+    },
+    emptySubtitle: {
+      fontSize: 15,
+      color: colors.textMuted,
+      textAlign: "center",
+    },
+    card: {
+      backgroundColor: colors.surface,
+      borderRadius: 5,
+      padding: 14,
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderLeftWidth: 4,
+      borderLeftColor: colors.primary,
+      ...panelElevation(colors),
+    },
+    cardHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 4,
+    },
+    cardTitle: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: colors.textSecondary,
+      flex: 1,
+      marginRight: 8,
+    },
+    statusBadge: {
+      fontSize: 11,
+      color: colors.badgeUrgentText,
+      backgroundColor: colors.badgeUrgentBg,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 999,
+      overflow: "hidden",
+    },
+    cardMeta: {
+      fontSize: 12,
+      color: colors.textMuted,
+      marginBottom: 4,
+    },
+    cardDescription: {
+      fontSize: 13,
+      color: colors.accentText,
+    },
+  });
+}
 

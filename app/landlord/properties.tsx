@@ -1,10 +1,14 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, RefreshControl } from "react-native";
-import { useRouter } from "expo-router";
-import { useFocusEffect } from "@react-navigation/native";
-import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
 import { PropertyCard } from "@/components/PropertyCard";
+import { SearchBar } from "@/components/SearchBar";
+import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
+import { panelElevation } from "@/lib/contrastScreenStyles";
+import type { AppThemeColors } from "@/lib/theme";
+import { supabase } from "@/lib/supabase";
+import { useFocusEffect } from "@react-navigation/native";
+import { useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 
 type Property = {
   property_id: string;
@@ -16,10 +20,12 @@ type Property = {
   image_url: string | null;
   created_at: string;
 };
-
+ 
 export default function LandlordPropertiesScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
-  const { landlordId } = useAuth();
+  const { landlordId, isLoading } = useAuth();
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -82,10 +88,22 @@ export default function LandlordPropertiesScreen() {
     );
   }, [properties, search]);
 
+  if (isLoading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
   if (!landlordId) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366f1" />
+        <Text style={styles.emptyTitle}>Landlord profile not found</Text>
+        <Text style={styles.emptySubtitle}>
+          This account doesn’t have a landlord record yet. Create a landlord account from the app’s
+          signup flow, then log in again.
+        </Text>
       </View>
     );
   }
@@ -93,7 +111,7 @@ export default function LandlordPropertiesScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366f1" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -101,12 +119,11 @@ export default function LandlordPropertiesScreen() {
   return (
     <View style={styles.container}>
       {properties.length > 0 && (
-        <TextInput
-          style={styles.search}
-          placeholder="Search properties..."
-          placeholderTextColor="#64748b"
+        <SearchBar
           value={search}
           onChangeText={setSearch}
+          placeholder="Search properties..."
+          containerStyle={styles.searchBar}
         />
       )}
 
@@ -119,7 +136,7 @@ export default function LandlordPropertiesScreen() {
               setRefreshing(true);
               fetchProperties({ skipFullScreenLoading: true });
             }}
-            tintColor="#6366f1"
+            tintColor={colors.primary}
           />
         }
       >
@@ -169,72 +186,67 @@ export default function LandlordPropertiesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#020617",
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#020617",
-  },
-  search: {
-    backgroundColor: "#0f172a",
-    borderWidth: 1,
-    borderColor: "#1e293b",
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    marginHorizontal: 20,
-    marginTop: 12,
-    marginBottom: 8,
-    fontSize: 16,
-    color: "#f8fafc",
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 32,
-  },
-  empty: {
-    alignItems: "center",
-    paddingVertical: 48,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#f8fafc",
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    fontSize: 15,
-    color: "#94a3b8",
-    marginBottom: 24,
-  },
-  addButton: {
-    backgroundColor: "#6366f1",
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-  },
-  addButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  addAnother: {
-    marginTop: 8,
-    paddingVertical: 14,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#334155",
-    borderRadius: 12,
-    borderStyle: "dashed",
-  },
-  addAnotherText: {
-    color: "#94a3b8",
-    fontSize: 15,
-    fontWeight: "500",
-  },
-});
+function createStyles(colors: AppThemeColors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bgSecondary,
+    },
+    centered: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.bgSecondary,
+    },
+    searchBar: {
+      marginHorizontal: 20,
+      marginTop: 12,
+      marginBottom: 8,
+    },
+    scrollContent: {
+      padding: 20,
+      paddingBottom: 32,
+    },
+    empty: {
+      alignItems: "center",
+      paddingVertical: 48,
+    },
+    emptyTitle: {
+      fontSize: 20,
+      fontWeight: "600",
+      color: colors.text,
+      marginBottom: 8,
+    },
+    emptySubtitle: {
+      fontSize: 15,
+      color: colors.textMuted,
+      marginBottom: 24,
+    },
+    addButton: {
+      backgroundColor: colors.primary,
+      paddingVertical: 14,
+      paddingHorizontal: 24,
+      borderRadius: 5,
+    },
+    addButtonText: {
+      color: colors.onPrimary,
+      fontSize: 16,
+      fontWeight: "600",
+    },
+    addAnother: {
+      marginTop: 8,
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderRadius: 999,
+      borderStyle: "dashed",
+    },
+    addAnotherText: {
+      color: colors.textMuted,
+      fontSize: 15,
+      fontWeight: "500",
+    },
+  });
+}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -9,9 +9,14 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
+import { panelElevation } from "@/lib/contrastScreenStyles";
+import type { AppThemeColors } from "@/lib/theme";
 import { supabase } from "@/lib/supabase";
 
 export default function LeaseDetailScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
   const { landlordId } = useAuth();
   const { leaseId } = useLocalSearchParams<{ leaseId?: string }>();
@@ -106,7 +111,7 @@ export default function LeaseDetailScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366f1" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -158,73 +163,78 @@ export default function LeaseDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#020617",
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
-    backgroundColor: "#020617",
-  },
-  summary: {
-    marginBottom: 24,
-  },
-  label: {
-    fontSize: 12,
-    color: "#64748b",
-    marginTop: 14,
-    marginBottom: 2,
-  },
-  value: {
-    fontSize: 16,
-    color: "#e5e7eb",
-    fontWeight: "500",
-  },
-  valueSub: {
-    fontSize: 14,
-    color: "#94a3b8",
-    marginTop: 2,
-  },
-  badge: {
-    alignSelf: "flex-start",
-    marginTop: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: "#334155",
-  },
-  badgeSigned: {
-    backgroundColor: "#166534",
-  },
-  badgeText: {
-    fontSize: 13,
-    color: "#e5e7eb",
-    fontWeight: "600",
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#e5e7eb",
-    marginBottom: 10,
-  },
-  detailsBlock: {
-    backgroundColor: "#0f172a",
-    borderWidth: 1,
-    borderColor: "#1e293b",
-    borderRadius: 12,
-    padding: 16,
-  },
-  detailsText: {
-    fontSize: 13,
-    color: "#cbd5f5",
-    lineHeight: 20,
-  },
-  noDetails: {
-    fontSize: 14,
-    color: "#94a3b8",
-  },
-});
+function createStyles(colors: AppThemeColors) {
+  return StyleSheet.create({
+    centered: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.bgSecondary,
+    },
+    scrollContent: {
+      padding: 20,
+      paddingBottom: 40,
+      backgroundColor: colors.bgSecondary,
+    },
+    summary: {
+      marginBottom: 24,
+    },
+    label: {
+      fontSize: 12,
+      color: colors.textMuted,
+      marginTop: 14,
+      marginBottom: 2,
+    },
+    value: {
+      fontSize: 16,
+      color: colors.textSecondary,
+      fontWeight: "500",
+    },
+    valueSub: {
+      fontSize: 14,
+      color: colors.textMuted,
+      marginTop: 2,
+    },
+    badge: {
+      alignSelf: "flex-start",
+      marginTop: 16,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 5,
+      backgroundColor: colors.borderStrong,
+    },
+    badgeSigned: {
+      backgroundColor: colors.successBg,
+    },
+    badgeText: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      fontWeight: "600",
+    },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: "600",
+      color: colors.textSecondary,
+      marginBottom: 10,
+    },
+    detailsBlock: {
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderLeftWidth: 4,
+      borderLeftColor: colors.primary,
+      borderRadius: 5,
+      padding: 16,
+      ...panelElevation(colors),
+    },
+    detailsText: {
+      fontSize: 13,
+      color: colors.accentText,
+      lineHeight: 20,
+    },
+    noDetails: {
+      fontSize: 14,
+      color: colors.textMuted,
+    },
+  });
+}

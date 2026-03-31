@@ -1,19 +1,22 @@
-import { useEffect, useState, useCallback } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
+import { panelElevation } from "@/lib/contrastScreenStyles";
+import type { AppThemeColors } from "@/lib/theme";
+import { supabase } from "@/lib/supabase";
 import { useFocusEffect } from "@react-navigation/native";
+import { useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  View,
+  ActivityIndicator,
+  Image,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
   Text,
   TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  ActivityIndicator,
-  RefreshControl,
-  Image,
+  View,
 } from "react-native";
-import { useRouter } from "expo-router";
-import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
-
+ 
 type MaintenanceRequest = {
   request_id: string;
   property_id: string;
@@ -29,6 +32,8 @@ type MaintenanceRequest = {
 };
 
 export default function LandlordMaintenanceRequestsScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
   const { landlordId } = useAuth();
   const [activeTab, setActiveTab] = useState<"uncompleted" | "completed">("uncompleted");
@@ -65,7 +70,7 @@ export default function LandlordMaintenanceRequestsScreen() {
           .order("created_at", { ascending: false });
         if (error) throw error;
 
-        setRequests((data ?? []) as MaintenanceRequest[]);
+        setRequests((data ?? []) as unknown as MaintenanceRequest[]);
       } catch (e) {
         console.error("Error loading maintenance requests", e);
         setRequests([]);
@@ -112,7 +117,7 @@ export default function LandlordMaintenanceRequestsScreen() {
   if (!landlordId) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366f1" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -120,7 +125,7 @@ export default function LandlordMaintenanceRequestsScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366f1" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -198,7 +203,7 @@ export default function LandlordMaintenanceRequestsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#6366f1"
+            tintColor={colors.primary}
           />
         }
       >
@@ -257,127 +262,132 @@ export default function LandlordMaintenanceRequestsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#020617",
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#020617",
-  },
-  tabs: {
-    flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: "#1e293b",
-    paddingHorizontal: 8,
-  },
-  tab: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 14,
-    gap: 6,
-  },
-  tabActive: {
-    borderBottomWidth: 2,
-    borderBottomColor: "#6366f1",
-  },
-  tabText: {
-    fontSize: 15,
-    fontWeight: "500",
-    color: "#94a3b8",
-  },
-  tabTextActive: {
-    color: "#f8fafc",
-    fontWeight: "600",
-  },
-  tabBadge: {
-    backgroundColor: "#334155",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    minWidth: 22,
-    alignItems: "center",
-  },
-  tabBadgeActive: {
-    backgroundColor: "#4338ca",
-  },
-  tabBadgeText: {
-    fontSize: 12,
-    color: "#94a3b8",
-    fontWeight: "600",
-  },
-  tabBadgeTextActive: {
-    color: "#fff",
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 32,
-  },
-  empty: {
-    alignItems: "center",
-    paddingVertical: 48,
-  },
-  emptySubtitle: {
-    fontSize: 15,
-    color: "#94a3b8",
-  },
-  card: {
-    backgroundColor: "#0f172a",
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: "#1f2937",
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#e5e7eb",
-    flex: 1,
-    marginRight: 8,
-  },
-  cardProperty: {
-    fontSize: 13,
-    color: "#94a3b8",
-    marginBottom: 2,
-  },
-  statusBadge: {
-    fontSize: 11,
-    color: "#fefce8",
-    backgroundColor: "#f97316",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 999,
-  },
-  statusBadgeCompleted: {
-    backgroundColor: "#22c55e",
-    color: "#fff",
-  },
-  cardMeta: {
-    fontSize: 12,
-    color: "#64748b",
-    marginBottom: 4,
-  },
-  cardPhoto: {
-    width: "100%",
-    height: 160,
-    borderRadius: 8,
-    marginVertical: 6,
-    backgroundColor: "#1e293b",
-  },
-  cardDescription: {
-    fontSize: 13,
-    color: "#cbd5f5",
-  },
-});
+function createStyles(colors: AppThemeColors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bgSecondary,
+    },
+    centered: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.bgSecondary,
+    },
+    tabs: {
+      flexDirection: "row",
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      paddingHorizontal: 8,
+    },
+    tab: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 14,
+      gap: 6,
+    },
+    tabActive: {
+      borderBottomWidth: 2,
+      borderBottomColor: colors.tabIndicator,
+    },
+    tabText: {
+      fontSize: 15,
+      fontWeight: "500",
+      color: colors.tabInactive,
+    },
+    tabTextActive: {
+      color: colors.tabActive,
+      fontWeight: "600",
+    },
+    tabBadge: {
+      backgroundColor: colors.borderStrong,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 5,
+      minWidth: 22,
+      alignItems: "center",
+    },
+    tabBadgeActive: {
+      backgroundColor: colors.primaryPressed,
+    },
+    tabBadgeText: {
+      fontSize: 12,
+      color: colors.tabInactive,
+      fontWeight: "600",
+    },
+    tabBadgeTextActive: {
+      color: colors.onPrimary,
+    },
+    scrollContent: {
+      padding: 20,
+      paddingBottom: 32,
+    },
+    empty: {
+      alignItems: "center",
+      paddingVertical: 48,
+    },
+    emptySubtitle: {
+      fontSize: 15,
+      color: colors.textMuted,
+    },
+    card: {
+      backgroundColor: colors.surface,
+      borderRadius: 5,
+      padding: 14,
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderLeftWidth: 4,
+      borderLeftColor: colors.primary,
+      ...panelElevation(colors),
+    },
+    cardHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 4,
+    },
+    cardTitle: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: colors.textSecondary,
+      flex: 1,
+      marginRight: 8,
+    },
+    cardProperty: {
+      fontSize: 13,
+      color: colors.textMuted,
+      marginBottom: 2,
+    },
+    statusBadge: {
+      fontSize: 11,
+      color: colors.badgeUrgentText,
+      backgroundColor: colors.badgeUrgentBg,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 999,
+    },
+    statusBadgeCompleted: {
+      backgroundColor: colors.success,
+      color: colors.onPrimary,
+    },
+    cardMeta: {
+      fontSize: 12,
+      color: colors.textMuted,
+      marginBottom: 4,
+    },
+    cardPhoto: {
+      width: "100%",
+      height: 160,
+      borderRadius: 5,
+      marginVertical: 6,
+      backgroundColor: colors.border,
+    },
+    cardDescription: {
+      fontSize: 13,
+      color: colors.accentText,
+    },
+  });
+}

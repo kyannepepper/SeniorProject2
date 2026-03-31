@@ -1,129 +1,146 @@
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
-import { useRouter } from "expo-router";
+import { BrandLogo } from "@/components/BrandLogo";
 import { useAuth } from "@/contexts/AuthContext";
-import { useEffect } from "react";
+import { useTheme } from "@/contexts/ThemeContext";
+import { createContrastScreenStyles } from "@/lib/contrastScreenStyles";
+import type { AppThemeColors } from "@/lib/theme";
+import { useRouter } from "expo-router";
+import { useEffect, useMemo } from "react";
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export default function WelcomeScreen() {
-  const { session, isLoading, userRole } = useAuth();
+  const { session, isLoading, userRole, landlordId } = useAuth();
+  const { colors } = useTheme();
   const router = useRouter();
+  const base = useMemo(() => createContrastScreenStyles(colors), [colors]);
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   useEffect(() => {
-    if (!isLoading && session && userRole) {
-      if (userRole === "landlord") router.replace("/landlord");
-      else if (userRole === "tenant") router.replace("/tenant");
-      else if (userRole === "maintenance") router.replace("/maintenance");
+    if (isLoading || !session || !userRole) return;
+    if (userRole === "landlord") {
+      if (!landlordId) return;
+      router.replace("/landlord");
+      return;
     }
-  }, [session, userRole, isLoading, router]);
+    if (userRole === "tenant") router.replace("/tenant");
+    else if (userRole === "maintenance") router.replace("/maintenance");
+  }, [session, userRole, landlordId, isLoading, router]);
 
-  // Loading: wait for auth and role
-  if (isLoading || (session && userRole === null)) {
+  if (isLoading || (session && userRole === null) || (session && userRole === "landlord" && !landlordId)) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366f1" />
+      <View style={base.screenCentered}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
-  // Logged in and redirecting by role
   if (session && userRole) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366f1" />
+      <View style={base.screenCentered}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>PropertyFlow</Text>
-      <Text style={styles.subtitle}>Micro Property Management</Text>
+    <View style={base.screen}>
+      <View style={styles.inner}>
+        <View style={styles.welcomeBlock}>
+          <View style={styles.logoRow}>
+            <BrandLogo size={100} />
+          </View>
+          <Text style={styles.brandTitle}>
+            <Text style={styles.brandRent}>RENT </Text>
+            <Text style={styles.brandSquirrel}>SQUIRREL</Text>
+          </Text>
+          <Text style={styles.subtitle}>Log in or create an account to continue.</Text>
 
-      <View style={styles.buttons}>
-        <TouchableOpacity
-          style={styles.primaryButton}
-          onPress={() => router.push("/login")}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.primaryButtonText}>Login</Text>
-        </TouchableOpacity>
+          <View style={styles.buttons}>
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={() => router.push("/login")}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.primaryButtonText}>Login</Text>
+            </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.secondaryButton}
-          onPress={() => router.push("/signup")}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.secondaryButtonText}>Create Account</Text>
-        </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={() => router.push("/signup")}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.secondaryButtonText}>Create Account</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#0f172a",
-    padding: 24,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#0f172a",
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: "700",
-    color: "#f8fafc",
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: "#94a3b8",
-    marginBottom: 48,
-  },
-  buttons: {
-    width: "100%",
-    maxWidth: 320,
-    gap: 16,
-  },
-  primaryButton: {
-    backgroundColor: "#6366f1",
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  primaryButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  secondaryButton: {
-    backgroundColor: "#334155",
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  secondaryButtonText: {
-    color: "#f8fafc",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  outlineButton: {
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#475569",
-  },
-  outlineButtonText: {
-    color: "#94a3b8",
-    fontSize: 16,
-    fontWeight: "500",
-  },
-});
+function createStyles(colors: AppThemeColors) {
+  return StyleSheet.create({
+    inner: {
+      flex: 1,
+      padding: 22,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    welcomeBlock: {
+      width: "100%",
+      maxWidth: 420,
+      alignItems: "center",
+    },
+    logoRow: {
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    brandTitle: {
+      fontSize: 36,
+      fontWeight: "800",
+      marginBottom: 10,
+      textAlign: "center",
+      letterSpacing: -0.8,
+    },
+    brandRent: {
+      color: colors.text,
+    },
+    brandSquirrel: {
+      color: colors.primary,
+    },
+    subtitle: {
+      fontSize: 15,
+      color: colors.textMuted,
+      marginBottom: 22,
+      textAlign: "center",
+      lineHeight: 22,
+    },
+    buttons: {
+      width: "100%",
+      gap: 14,
+    },
+    primaryButton: {
+      backgroundColor: colors.primary,
+      paddingVertical: 16,
+      paddingHorizontal: 24,
+      borderRadius: 5,
+      alignItems: "center",
+    },
+    primaryButtonText: {
+      color: colors.onPrimary,
+      fontSize: 17,
+      fontWeight: "700",
+    },
+    secondaryButton: {
+      backgroundColor: "#000000",
+      paddingVertical: 16,
+      paddingHorizontal: 24,
+      borderRadius: 5,
+      alignItems: "center",
+    },
+    secondaryButtonText: {
+      color: "#ffffff",
+      fontSize: 17,
+      fontWeight: "700",
+    },
+  });
+}

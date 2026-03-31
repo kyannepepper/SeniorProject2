@@ -1,19 +1,22 @@
-import { useEffect, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
+import { panelElevation } from "@/lib/contrastScreenStyles";
+import { supabase } from "@/lib/supabase";
+import type { AppThemeColors } from "@/lib/theme";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useMemo, useState } from "react";
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
   ActivityIndicator,
   Alert,
   Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
-
+ 
 type WorkerOption = {
   maintenance_worker_id: string;
   name: string;
@@ -28,6 +31,8 @@ const STATUS_OPTIONS = [
 ] as const;
 
 export default function MaintenanceRequestDetailScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
   const { landlordId } = useAuth();
   const { requestId } = useLocalSearchParams<{ requestId?: string }>();
@@ -174,7 +179,7 @@ export default function MaintenanceRequestDetailScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366f1" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -189,7 +194,7 @@ export default function MaintenanceRequestDetailScreen() {
         value={title}
         onChangeText={setTitle}
         placeholder="Short summary"
-        placeholderTextColor="#64748b"
+        placeholderTextColor={colors.placeholder}
       />
 
       <Text style={styles.label}>Description</Text>
@@ -198,7 +203,7 @@ export default function MaintenanceRequestDetailScreen() {
         value={description}
         onChangeText={setDescription}
         placeholder="Describe the issue..."
-        placeholderTextColor="#64748b"
+        placeholderTextColor={colors.placeholder}
         multiline
         numberOfLines={4}
       />
@@ -281,7 +286,7 @@ export default function MaintenanceRequestDetailScreen() {
         activeOpacity={0.85}
       >
         {saving ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={colors.onPrimary} />
         ) : (
           <Text style={styles.saveButtonText}>Save changes</Text>
         )}
@@ -290,122 +295,128 @@ export default function MaintenanceRequestDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#020617",
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
-    backgroundColor: "#020617",
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#cbd5f5",
-    marginTop: 16,
-    marginBottom: 6,
-  },
-  input: {
-    backgroundColor: "#0f172a",
-    borderWidth: 1,
-    borderColor: "#1e293b",
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    fontSize: 16,
-    color: "#f8fafc",
-  },
-  multiline: {
-    minHeight: 90,
-    textAlignVertical: "top",
-  },
-  chipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: "#1e293b",
-    borderWidth: 1,
-    borderColor: "#334155",
-  },
-  chipSelected: {
-    borderColor: "#6366f1",
-    backgroundColor: "#4338ca",
-  },
-  chipText: {
-    fontSize: 14,
-    color: "#94a3b8",
-  },
-  chipTextSelected: {
-    color: "#fff",
-    fontWeight: "600",
-  },
-  workerList: {
-    gap: 8,
-  },
-  workerOption: {
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    backgroundColor: "#0f172a",
-    borderWidth: 1,
-    borderColor: "#1e293b",
-  },
-  workerOptionSelected: {
-    borderColor: "#6366f1",
-    backgroundColor: "#1e1b4b",
-  },
-  workerOptionText: {
-    fontSize: 15,
-    color: "#94a3b8",
-  },
-  workerOptionTextSelected: {
-    color: "#e5e7eb",
-    fontWeight: "600",
-  },
-  hint: {
-    fontSize: 13,
-    color: "#64748b",
-    marginTop: 6,
-  },
-  metaLabel: {
-    fontSize: 12,
-    color: "#64748b",
-    marginTop: 16,
-  },
-  metaValue: {
-    fontSize: 14,
-    color: "#cbd5f5",
-    marginTop: 2,
-  },
-  photo: {
-    width: "100%",
-    height: 160,
-    borderRadius: 8,
-    marginTop: 6,
-    backgroundColor: "#1e293b",
-  },
-  saveButton: {
-    backgroundColor: "#6366f1",
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 32,
-  },
-  saveButtonDisabled: {
-    opacity: 0.7,
-  },
-  saveButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-});
+function createStyles(colors: AppThemeColors) {
+  return StyleSheet.create({
+    centered: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.bgSecondary,
+    },
+    scrollContent: {
+      padding: 20,
+      paddingBottom: 40,
+      backgroundColor: colors.bgSecondary,
+    },
+    label: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.accentText,
+      marginTop: 16,
+      marginBottom: 6,
+    },
+    input: {
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderRadius: 5,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      fontSize: 16,
+      color: colors.text,
+      ...panelElevation(colors),
+    },
+    multiline: {
+      minHeight: 90,
+      textAlignVertical: "top",
+    },
+    chipRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    chip: {
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 5,
+      backgroundColor: colors.chipBg,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+    },
+    chipSelected: {
+      borderColor: colors.accentBorder,
+      backgroundColor: colors.primaryPressed,
+    },
+    chipText: {
+      fontSize: 14,
+      color: colors.chipText,
+    },
+    chipTextSelected: {
+      color: colors.onPrimary,
+      fontWeight: "600",
+    },
+    workerList: {
+      gap: 8,
+    },
+    workerOption: {
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      borderRadius: 5,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderLeftWidth: 4,
+      borderLeftColor: colors.primary,
+      ...panelElevation(colors),
+    },
+    workerOptionSelected: {
+      borderColor: colors.accentBorder,
+      backgroundColor: colors.selectedAccentBg,
+    },
+    workerOptionText: {
+      fontSize: 15,
+      color: colors.textMuted,
+    },
+    workerOptionTextSelected: {
+      color: colors.textSecondary,
+      fontWeight: "600",
+    },
+    hint: {
+      fontSize: 13,
+      color: colors.textMuted,
+      marginTop: 6,
+    },
+    metaLabel: {
+      fontSize: 12,
+      color: colors.textMuted,
+      marginTop: 16,
+    },
+    metaValue: {
+      fontSize: 14,
+      color: colors.accentText,
+      marginTop: 2,
+    },
+    photo: {
+      width: "100%",
+      height: 160,
+      borderRadius: 5,
+      marginTop: 6,
+      backgroundColor: colors.border,
+    },
+    saveButton: {
+      backgroundColor: colors.primary,
+      paddingVertical: 16,
+      borderRadius: 5,
+      alignItems: "center",
+      marginTop: 32,
+    },
+    saveButtonDisabled: {
+      opacity: 0.7,
+    },
+    saveButtonText: {
+      color: colors.onPrimary,
+      fontSize: 16,
+      fontWeight: "600",
+    },
+  });
+}

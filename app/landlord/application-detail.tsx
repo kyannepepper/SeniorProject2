@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -7,11 +7,12 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
-  Platform,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import * as Clipboard from "expo-clipboard";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
+import { panelElevation } from "@/lib/contrastScreenStyles";
+import type { AppThemeColors } from "@/lib/theme";
 import { supabase } from "@/lib/supabase";
 
 type Reference = {
@@ -22,6 +23,8 @@ type Reference = {
 };
 
 export default function ApplicationDetailScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
   const { landlordId } = useAuth();
   const { applicationId } = useLocalSearchParams<{ applicationId?: string }>();
@@ -42,7 +45,6 @@ export default function ApplicationDetailScreen() {
     property_address: string;
   } | null>(null);
   const [references, setReferences] = useState<Reference[]>([]);
-  const [acceptedTenantId, setAcceptedTenantId] = useState<string | null>(null);
 
   const formatDate = (d: string | null) => {
     if (!d) return "—";
@@ -186,45 +188,19 @@ export default function ApplicationDetailScreen() {
       const { error: delError } = await supabase.from("applications").delete().eq("application_id", application.application_id);
       if (delError) throw delError;
 
-      setAcceptedTenantId(tid);
+      router.replace(`/landlord/add-lease?tenantId=${encodeURIComponent(tid)}`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Could not accept application.";
       Alert.alert("Error", msg);
+    } finally {
       setBusy(false);
-    }
-  }
-
-  function copyCode() {
-    if (acceptedTenantId) {
-      Clipboard.setString(acceptedTenantId);
-      Alert.alert("Copied", "Tenant code copied to clipboard. Share it with the applicant so they can use it when creating their account.");
     }
   }
 
   if (!applicationId || !landlordId || loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366f1" />
-      </View>
-    );
-  }
-
-  if (acceptedTenantId) {
-    return (
-      <View style={styles.centered}>
-        <Text style={styles.successTitle}>Application accepted</Text>
-        <Text style={styles.successSubtitle}>Share this tenant code with the applicant. They will use it when creating their account.</Text>
-        <View style={styles.codeBlock}>
-          <Text style={styles.codeText} selectable>
-            {acceptedTenantId}
-          </Text>
-        </View>
-        <TouchableOpacity style={styles.copyButton} onPress={copyCode} activeOpacity={0.8}>
-          <Text style={styles.copyButtonText}>Copy tenant code</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.doneButton} onPress={() => router.back()} activeOpacity={0.8}>
-          <Text style={styles.doneButtonText}>Done</Text>
-        </TouchableOpacity>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -232,7 +208,7 @@ export default function ApplicationDetailScreen() {
   if (!application) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366f1" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -284,7 +260,7 @@ export default function ApplicationDetailScreen() {
           disabled={busy}
           activeOpacity={0.8}
         >
-          {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.acceptButtonText}>Accept</Text>}
+          {busy ? <ActivityIndicator color={colors.onPrimary} /> : <Text style={styles.acceptButtonText}>Accept</Text>}
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.declineButton, busy && styles.buttonDisabled]}
@@ -299,137 +275,96 @@ export default function ApplicationDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#020617",
-    padding: 24,
-  },
-  scroll: {
-    padding: 20,
-    paddingBottom: 40,
-    backgroundColor: "#020617",
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#e5e7eb",
-    marginTop: 24,
-    marginBottom: 8,
-  },
-  label: {
-    fontSize: 12,
-    color: "#94a3b8",
-    marginTop: 12,
-    marginBottom: 2,
-  },
-  value: {
-    fontSize: 16,
-    color: "#f8fafc",
-  },
-  valueSecondary: {
-    fontSize: 14,
-    color: "#94a3b8",
-  },
-  valueBlock: {
-    fontSize: 16,
-    color: "#f8fafc",
-    marginBottom: 8,
-  },
-  refCard: {
-    backgroundColor: "#0f172a",
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: "#1e293b",
-  },
-  refName: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#f8fafc",
-  },
-  refMeta: {
-    fontSize: 13,
-    color: "#94a3b8",
-    marginTop: 2,
-  },
-  actions: {
-    marginTop: 32,
-    gap: 12,
-  },
-  acceptButton: {
-    backgroundColor: "#22c55e",
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  acceptButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  declineButton: {
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#f87171",
-  },
-  declineButtonText: {
-    color: "#f87171",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  successTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#f8fafc",
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  successSubtitle: {
-    fontSize: 15,
-    color: "#94a3b8",
-    marginBottom: 24,
-    textAlign: "center",
-  },
-  codeBlock: {
-    backgroundColor: "#0f172a",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#1e293b",
-    width: "100%",
-  },
-  codeText: {
-    fontSize: 14,
-    color: "#a5b4fc",
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-  },
-  copyButton: {
-    backgroundColor: "#6366f1",
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    marginBottom: 12,
-  },
-  copyButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  doneButton: {
-    paddingVertical: 14,
-  },
-  doneButtonText: {
-    color: "#94a3b8",
-    fontSize: 16,
-  },
-});
+function createStyles(colors: AppThemeColors) {
+  return StyleSheet.create({
+    centered: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.bgSecondary,
+      padding: 24,
+    },
+    scroll: {
+      padding: 20,
+      paddingBottom: 40,
+      backgroundColor: colors.bgSecondary,
+    },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: "600",
+      color: colors.textSecondary,
+      marginTop: 24,
+      marginBottom: 8,
+    },
+    label: {
+      fontSize: 12,
+      color: colors.textMuted,
+      marginTop: 12,
+      marginBottom: 2,
+    },
+    value: {
+      fontSize: 16,
+      color: colors.text,
+    },
+    valueSecondary: {
+      fontSize: 14,
+      color: colors.textMuted,
+    },
+    valueBlock: {
+      fontSize: 16,
+      color: colors.text,
+      marginBottom: 8,
+    },
+    refCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 5,
+      padding: 12,
+      marginBottom: 8,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderLeftWidth: 4,
+      borderLeftColor: colors.primary,
+      ...panelElevation(colors),
+    },
+    refName: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: colors.text,
+    },
+    refMeta: {
+      fontSize: 13,
+      color: colors.textMuted,
+      marginTop: 2,
+    },
+    actions: {
+      marginTop: 32,
+      gap: 12,
+    },
+    acceptButton: {
+      backgroundColor: colors.success,
+      paddingVertical: 16,
+      borderRadius: 5,
+      alignItems: "center",
+    },
+    acceptButtonText: {
+      color: colors.onPrimary,
+      fontSize: 16,
+      fontWeight: "600",
+    },
+    declineButton: {
+      paddingVertical: 16,
+      borderRadius: 5,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.danger,
+    },
+    declineButtonText: {
+      color: colors.danger,
+      fontSize: 16,
+      fontWeight: "600",
+    },
+    buttonDisabled: {
+      opacity: 0.6,
+    },
+  });
+}
