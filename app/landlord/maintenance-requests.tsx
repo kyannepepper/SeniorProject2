@@ -3,6 +3,11 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { panelElevation } from "@/lib/contrastScreenStyles";
 import type { AppThemeColors } from "@/lib/theme";
 import { supabase } from "@/lib/supabase";
+import {
+  formatUrgencyLabel,
+  getMaintenanceCardBadge,
+  urgencySeverityColor,
+} from "@/lib/maintenanceRequestDisplay";
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -26,6 +31,7 @@ type MaintenanceRequest = {
   status: string | null;
   urgency: string | null;
   photo_url: string | null;
+  maintenance_worker_id: string | null;
   created_at: string;
   updated_at: string | null;
   properties?: { name: string } | null;
@@ -62,7 +68,7 @@ export default function LandlordMaintenanceRequestsScreen() {
           .select(
             `
             request_id, property_id, tenant_id, title, description,
-            status, urgency, photo_url, created_at, updated_at,
+            status, urgency, photo_url, maintenance_worker_id, created_at, updated_at,
             properties (name)
           `
           )
@@ -216,7 +222,10 @@ export default function LandlordMaintenanceRequestsScreen() {
             </Text>
           </View>
         ) : (
-          displayList.map((r) => (
+          displayList.map((r) => {
+            const badge = getMaintenanceCardBadge(r.status, r.maintenance_worker_id);
+            const urgencyColor = urgencySeverityColor(colors, r.urgency);
+            return (
             <TouchableOpacity
               key={r.request_id}
               style={styles.card}
@@ -230,22 +239,30 @@ export default function LandlordMaintenanceRequestsScreen() {
                 <Text
                   style={[
                     styles.statusBadge,
-                    (r.status ?? "").toLowerCase() === "completed" &&
-                      styles.statusBadgeCompleted,
+                    badge.variant === "completed" && styles.statusBadgeCompleted,
+                    badge.variant === "assigned" && styles.statusBadgeAssigned,
+                    badge.variant === "pending" && styles.statusBadgePending,
+                    badge.variant === "cancelled" && styles.statusBadgeCancelled,
                   ]}
                 >
-                  {(r.status ?? "open").replace("_", " ").toUpperCase()}
+                  {badge.label}
                 </Text>
               </View>
               {r.properties?.name ? (
                 <Text style={styles.cardProperty}>{r.properties.name}</Text>
               ) : null}
-              <Text style={styles.cardMeta}>
-                {formatDate(r.created_at)}
-                {r.urgency
-                  ? ` · ${String(r.urgency).charAt(0).toUpperCase() + String(r.urgency).slice(1)}`
-                  : ""}
-              </Text>
+              <View style={styles.cardMetaRow}>
+                <Text style={styles.cardMetaText}>{formatDate(r.created_at)}</Text>
+                {r.urgency ? (
+                  <>
+                    <Text style={styles.cardMetaText}> · </Text>
+                    <View style={[styles.urgencyDot, { backgroundColor: urgencyColor }]} />
+                    <Text style={[styles.cardMetaText, styles.urgencyLabelSpacing]}>
+                      {formatUrgencyLabel(r.urgency)}
+                    </Text>
+                  </>
+                ) : null}
+              </View>
               {r.photo_url ? (
                 <Image source={{ uri: r.photo_url }} style={styles.cardPhoto} />
               ) : null}
@@ -255,7 +272,8 @@ export default function LandlordMaintenanceRequestsScreen() {
                 </Text>
               ) : null}
             </TouchableOpacity>
-          ))
+            );
+          })
         )}
       </ScrollView>
     </View>
@@ -363,8 +381,7 @@ function createStyles(colors: AppThemeColors) {
     },
     statusBadge: {
       fontSize: 11,
-      color: colors.badgeUrgentText,
-      backgroundColor: colors.badgeUrgentBg,
+      fontWeight: "600",
       paddingHorizontal: 8,
       paddingVertical: 2,
       borderRadius: 999,
@@ -373,10 +390,36 @@ function createStyles(colors: AppThemeColors) {
       backgroundColor: colors.success,
       color: colors.onPrimary,
     },
-    cardMeta: {
+    statusBadgeAssigned: {
+      backgroundColor: colors.selectedAccentBg,
+      color: colors.accentText,
+    },
+    statusBadgePending: {
+      backgroundColor: colors.badgeUrgentBg,
+      color: colors.badgeUrgentText,
+    },
+    statusBadgeCancelled: {
+      backgroundColor: colors.badgeStatusBg,
+      color: colors.textMuted,
+    },
+    cardMetaRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      flexWrap: "wrap",
+      marginBottom: 4,
+    },
+    cardMetaText: {
       fontSize: 12,
       color: colors.textMuted,
-      marginBottom: 4,
+    },
+    urgencyDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      marginLeft: 2,
+    },
+    urgencyLabelSpacing: {
+      marginLeft: 4,
     },
     cardPhoto: {
       width: "100%",

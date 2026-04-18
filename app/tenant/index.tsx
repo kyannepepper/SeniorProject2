@@ -7,19 +7,19 @@ import type { AppThemeColors } from "@/lib/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Image,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -62,6 +62,7 @@ export default function TenantDashboard() {
   const [paying, setPaying] = useState(false);
   const [justPaid, setJustPaid] = useState(false);
   const justPaidTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [propertyImageUrl, setPropertyImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
     // Reset the success state when the due payment changes / refreshes.
@@ -134,6 +135,7 @@ export default function TenantDashboard() {
       setLandlordPaymentPrefs(null);
       setPaymentHistoryPreview([]);
       setHasMorePaymentHistory(false);
+      setPropertyImageUrl(null);
       return;
     }
     setLoadingPayment(true);
@@ -173,15 +175,18 @@ export default function TenantDashboard() {
       const propertyId = tenantRes.data?.property_id as string | undefined;
       if (!propertyId || tenantRes.error) {
         setLandlordPaymentPrefs({ methodKey: null, details: null });
+        setPropertyImageUrl(null);
       } else {
         const { data: prop, error: propError } = await supabase
           .from("properties")
-          .select("landlord_id")
+          .select("landlord_id, image_url")
           .eq("property_id", propertyId)
           .maybeSingle();
         if (propError || !prop?.landlord_id) {
           setLandlordPaymentPrefs({ methodKey: null, details: null });
+          setPropertyImageUrl(null);
         } else {
+          setPropertyImageUrl((prop as { image_url?: string | null }).image_url ?? null);
           const { data: landlord, error: landlordError } = await supabase
             .from("landlords")
             .select("preferred_payment_method, preferred_payment_details")
@@ -203,6 +208,7 @@ export default function TenantDashboard() {
       setLandlordPaymentPrefs({ methodKey: null, details: null });
       setPaymentHistoryPreview([]);
       setHasMorePaymentHistory(false);
+      setPropertyImageUrl(null);
     } finally {
       setLoadingPayment(false);
     }
@@ -214,6 +220,24 @@ export default function TenantDashboard() {
       loadPayment();
     }, [loadPayment])
   );
+
+  function confirmPayRent() {
+    if (!tenantId || paying || justPaid) return;
+    Alert.alert(
+      "Confirm rent payment",
+      "Are you sure you paid your rent? Once you confirm, you can't undo this.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Yes, I paid",
+          style: "default",
+          onPress: () => {
+            void handlePayRent();
+          },
+        },
+      ]
+    );
+  }
 
   async function handlePayRent() {
     if (!tenantId) return;
@@ -282,7 +306,13 @@ export default function TenantDashboard() {
       keyboardShouldPersistTaps="handled"
     >
       <StatusBar style="light" />
-      <View style={[styles.hero, { paddingTop: insets.top + 22 }]}>
+      <View
+        style={[
+          styles.hero,
+          { paddingTop: insets.top + 22 },
+          !hasProperty && styles.heroMarginBelow,
+        ]}
+      >
         <View style={styles.heroTopRow}>
           <Text style={styles.heroLabel}>TENANT</Text>
           <TouchableOpacity
@@ -298,15 +328,24 @@ export default function TenantDashboard() {
         <Text style={styles.heroTitle}>
           Welcome{tenantName ? `, ${tenantName}` : email ? `, ${email}` : ""}
         </Text>
-        <Text style={styles.heroTagline}>Rent, lease, and maintenance — stay on top of your unit.</Text>
       </View>
 
-      <View style={styles.content}>
-        <Text style={styles.sectionLabel}>Quick actions</Text>
+      {hasProperty ? (
+        <View style={styles.propertyImageBleed}>
+          {propertyImageUrl ? (
+            <Image source={{ uri: propertyImageUrl }} style={styles.propertyImage} resizeMode="cover" />
+          ) : (
+            <View style={styles.propertyImagePlaceholder}>
+              <Text style={styles.propertyImagePlaceholderText}>No property photo</Text>
+            </View>
+          )}
+        </View>
+      ) : null}
 
+      <View style={styles.content}>
       {hasProperty && (
         <>
-          <View style={[styles.paymentCard, cardShadow]}>
+          <View style={styles.rentSection}>
             <Text style={styles.paymentTitle}>Rent</Text>
             {loadingPayment ? (
               <ActivityIndicator color={colors.primary} />
@@ -381,37 +420,48 @@ export default function TenantDashboard() {
 
           {!loadingPayment && currentPayment ? (
             <View style={styles.payOutside}>
-              <Text style={styles.payActionLabel}>I paid my rent</Text>
-              <View style={styles.payCircleShadow}>
-                <TouchableOpacity
-                  style={[
-                    styles.payCircleShell,
-                    justPaid && styles.payCircleSuccess,
-                    paying && styles.payCircleDisabled,
-                  ]}
-                  onPress={handlePayRent}
-                  disabled={paying || justPaid}
-                  activeOpacity={0.85}
-                  accessibilityRole="button"
-                  accessibilityLabel={justPaid ? "Payment recorded" : "I paid my rent"}
-                >
-                  {!justPaid ? (
-                    <LinearGradient
-                      colors={[colors.primary, colors.success]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={StyleSheet.absoluteFill}
-                    />
-                  ) : null}
-                  {paying ? (
-                    <ActivityIndicator color={colors.onPrimary} />
-                  ) : justPaid ? (
-                    <Ionicons name="checkmark" size={44} color={colors.onPrimary} />
-                  ) : (
-                    <Text style={styles.payCircleText}>$</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity
+                style={[
+                  styles.payRentButton,
+                  justPaid && styles.payRentButtonSuccess,
+                  paying && styles.payRentButtonDisabled,
+                ]}
+                onPress={confirmPayRent}
+                disabled={paying || justPaid}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  justPaid
+                    ? "Payment recorded"
+                    : `I paid my rent. Tap if you paid ${(
+                        Number(currentPayment.amount_due) + Number(currentPayment.late_fee || 0)
+                      ).toFixed(0)} dollars due on ${formatDate(currentPayment.date_due)}`
+                }
+              >
+                {paying ? (
+                  <ActivityIndicator color={colors.onPrimary} />
+                ) : justPaid ? (
+                  <>
+                    <Ionicons name="checkmark-circle" size={28} color={colors.onPrimary} />
+                    <Text style={[styles.payRentTitle, styles.payRentTextOnSuccess, { marginTop: 8 }]}>
+                      Payment recorded
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={[styles.payRentTitle, styles.payRentTextOnOrange]}>
+                      I paid my rent
+                    </Text>
+                    <Text style={[styles.payRentSub, styles.payRentTextOnOrange, styles.payRentSubMuted]}>
+                      Tap if you paid your rent of $
+                      {(
+                        Number(currentPayment.amount_due) + Number(currentPayment.late_fee || 0)
+                      ).toFixed(0)}{" "}
+                      due on {formatDate(currentPayment.date_due)}.
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
             </View>
           ) : null}
         </>
@@ -565,9 +615,9 @@ function createStyles(colors: AppThemeColors) {
       backgroundColor: colors.primary,
       borderRadius: 0,
       paddingTop: 22,
-      paddingBottom: 22,
+      paddingBottom: 20,
       paddingHorizontal: 20,
-      marginBottom: 18,
+      marginBottom: 0,
       position: "relative",
       ...Platform.select({
         ios: {
@@ -579,6 +629,9 @@ function createStyles(colors: AppThemeColors) {
         android: { elevation: 8 },
         default: {},
       }),
+    },
+    heroMarginBelow: {
+      marginBottom: 18,
     },
     heroLabel: {
       fontSize: 11,
@@ -602,35 +655,34 @@ function createStyles(colors: AppThemeColors) {
       fontSize: 24,
       fontWeight: "800",
       color: colors.onPrimary,
-      marginBottom: 6,
+      marginBottom: 0,
       letterSpacing: -0.5,
     },
-    heroTagline: {
-      fontSize: 15,
-      fontWeight: "500",
-      color: colors.onPrimary,
-      opacity: 0.92,
-      lineHeight: 22,
-    },
-    sectionLabel: {
-      fontSize: 12,
-      fontWeight: "700",
-      color: colors.textMuted,
-      letterSpacing: 1,
-      textTransform: "uppercase",
-      marginBottom: 12,
-    },
-    paymentCard: {
+    propertyImageBleed: {
       width: "100%",
-      backgroundColor: colors.surface,
-      borderRadius: 5,
-      padding: 16,
-      borderWidth: 1,
-      borderColor: colors.borderStrong,
-      borderTopWidth: 4,
-      borderTopColor: colors.primary,
-      marginTop: 4,
-      marginBottom: 14,
+      alignSelf: "stretch",
+      marginBottom: 12,
+      backgroundColor: colors.border,
+    },
+    propertyImage: {
+      width: "100%",
+      height: 220,
+      backgroundColor: colors.border,
+    },
+    propertyImagePlaceholder: {
+      width: "100%",
+      height: 180,
+      backgroundColor: colors.border,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    propertyImagePlaceholderText: {
+      fontSize: 14,
+      color: colors.placeholder,
+    },
+    rentSection: {
+      width: "100%",
+      marginBottom: 8,
     },
     paymentTitle: {
       fontSize: 14,
@@ -707,40 +759,53 @@ function createStyles(colors: AppThemeColors) {
     payOutside: {
       marginTop: 14,
       marginBottom: 14,
+      width: "100%",
+      alignSelf: "stretch",
+    },
+    payRentButton: {
+      width: "100%",
+      backgroundColor: "#e88326",
+      borderRadius: 12,
+      paddingVertical: 16,
+      paddingHorizontal: 18,
       alignItems: "center",
+      ...Platform.select({
+        ios: {
+          shadowColor: "rgba(232, 131, 38, 0.5)",
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 1,
+          shadowRadius: 10,
+        },
+        android: { elevation: 4 },
+        default: {},
+      }),
     },
-    payActionLabel: {
-      color: colors.textSecondary,
-      fontSize: 14,
-      fontWeight: "600",
-      marginBottom: 12,
-    },
-    payCircleShadow: {
-      shadowColor: "rgba(0,0,0,0.5)",
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.35,
-      shadowRadius: 14,
-      elevation: 8,
-    },
-    payCircleShell: {
-      width: 118,
-      height: 118,
-      borderRadius: 999,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: colors.primary,
-    },
-    payCircleSuccess: {
+    payRentButtonSuccess: {
       backgroundColor: colors.success,
     },
-    payCircleDisabled: {
-      opacity: 0.7,
+    payRentButtonDisabled: {
+      opacity: 0.75,
     },
-    payCircleText: {
+    payRentTitle: {
+      fontSize: 17,
+      fontWeight: "700",
+      textAlign: "center",
+    },
+    payRentTextOnOrange: {
       color: colors.onPrimary,
-      fontSize: 52,
-      fontWeight: "800",
-      lineHeight: 58,
+    },
+    payRentSubMuted: {
+      opacity: 0.95,
+    },
+    payRentTextOnSuccess: {
+      color: colors.onPrimary,
+    },
+    payRentSub: {
+      fontSize: 14,
+      fontWeight: "500",
+      textAlign: "center",
+      marginTop: 8,
+      lineHeight: 20,
     },
     menu: {
       width: "100%",

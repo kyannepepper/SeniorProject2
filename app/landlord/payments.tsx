@@ -49,6 +49,15 @@ export default function LandlordPaymentsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  const markPaymentsHubViewed = useCallback(async () => {
+    if (!landlordId) return;
+    const { error } = await supabase
+      .from("landlords")
+      .update({ last_viewed_payments_at: new Date().toISOString() })
+      .eq("landlord_id", landlordId);
+    if (error) console.warn("markPaymentsHubViewed", error);
+  }, [landlordId]);
+
   const load = useCallback(
     async (options?: { skipFullScreenLoading?: boolean }) => {
       if (!landlordId) {
@@ -132,7 +141,8 @@ export default function LandlordPaymentsScreen() {
   useFocusEffect(
     useCallback(() => {
       load();
-    }, [load])
+      void markPaymentsHubViewed();
+    }, [load, markPaymentsHubViewed])
   );
 
   const unpaid = useMemo(() => rows.filter((r) => !r.date_paid), [rows]);

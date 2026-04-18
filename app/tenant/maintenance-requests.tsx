@@ -1,21 +1,29 @@
-import { useEffect, useMemo, useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  ActivityIndicator,
-  Alert,
-  Image,
-} from "react-native";
-import * as ImagePicker from "expo-image-picker";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { panelElevation } from "@/lib/contrastScreenStyles";
-import type { AppThemeColors } from "@/lib/theme";
+import {
+  formatUrgencyLabel,
+  getMaintenanceCardBadge,
+  urgencySeverityColor,
+} from "@/lib/maintenanceRequestDisplay";
 import { supabase } from "@/lib/supabase";
+import type { AppThemeColors } from "@/lib/theme";
+import { decode } from "base64-arraybuffer";
+import * as FileSystem from "expo-file-system/legacy";
+import * as ImagePicker from "expo-image-picker";
+import { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 type MaintenanceRequest = {
   request_id: string;
@@ -26,11 +34,26 @@ type MaintenanceRequest = {
   status: string | null;
   urgency: string | null;
   photo_url: string | null;
+  maintenance_worker_id: string | null;
   created_at: string;
   updated_at: string | null;
 };
 
 const BUCKET = "maintenance-photos";
+
+async function readImageUriAsArrayBuffer(uri: string): Promise<ArrayBuffer> {
+  if (Platform.OS === "web") {
+    const res = await fetch(uri);
+    return await res.arrayBuffer();
+  }
+  const b64 = await FileSystem.readAsStringAsync(uri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+  if (!b64?.length) {
+    throw new Error("EMPTY_IMAGE_READ");
+  }
+  return decode(b64);
+}
 
 export default function TenantMaintenanceRequestsScreen() {
   const { colors } = useTheme();
@@ -45,6 +68,7 @@ export default function TenantMaintenanceRequestsScreen() {
   const [description, setDescription] = useState("");
   const [urgency, setUrgency] = useState<"low" | "medium" | "high">("medium");
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"create" | "requests">("create");
 
   const handlePickPhoto = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -57,7 +81,9 @@ export default function TenantMaintenanceRequestsScreen() {
       allowsEditing: true,
       quality: 0.8,
     });
-    if (!result.canceled) setPhotoUri(result.assets[0].uri);
+    if (!result.canceled && result.assets[0]) {
+      setPhotoUri(result.assets[0].uri);
+    }
   };
 
   useEffect(() => {
@@ -90,7 +116,7 @@ export default function TenantMaintenanceRequestsScreen() {
         const { data: reqs, error: reqError } = await supabase
           .from("maintenance_requests")
           .select(
-            "request_id, property_id, tenant_id, title, description, status, urgency, photo_url, created_at, updated_at"
+            "request_id, property_id, tenant_id, title, description, status, urgency, photo_url, maintenance_worker_id, created_at, updated_at"
           )
           .eq("tenant_id", tenant.tenant_id)
           .order("created_at", { ascending: false });
@@ -126,15 +152,31 @@ export default function TenantMaintenanceRequestsScreen() {
     try {
       let photoUrl: string | null = null;
       if (photoUri) {
-        const ext = photoUri.split(".").pop() ?? "jpg";
-        const path = `requests/${tenantId}/${Date.now()}.${ext}`;
-        const res = await fetch(photoUri);
-        const blob = await res.blob();
-        const { error: uploadError } = await supabase.storage
+        const path = `requests/${tenantId}/${Date.now()}.jpg`;
+        let buffer: ArrayBuffer;
+        try {
+          buffer = await readImageUriAsArrayBuffer(photoUri);
+        } catch {
+          Alert.alert(
+            "Photo error",
+            "Could not read the image from your device. Remove the photo and choose it again."
+          );
+          setSubmitting(false);
+          return;
+        }
+        if (buffer.byteLength < 64) {
+          Alert.alert(
+            "Photo error",
+            "The image file appears empty. Remove the photo and choose a different one."
+          );
+          setSubmitting(false);
+          return;
+        }
+        const { data: uploadData, error: uploadError } = await supabase.storage
           .from(BUCKET)
-          .upload(path, blob, { contentType: "image/jpeg", upsert: false });
+          .upload(path, buffer, { contentType: "image/jpeg", upsert: true });
         if (uploadError) throw uploadError;
-        const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
+        const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(uploadData.path);
         photoUrl = urlData.publicUrl;
       }
 
@@ -150,7 +192,7 @@ export default function TenantMaintenanceRequestsScreen() {
           photo_url: photoUrl,
         })
         .select(
-          "request_id, property_id, tenant_id, title, description, status, urgency, photo_url, created_at, updated_at"
+          "request_id, property_id, tenant_id, title, description, status, urgency, photo_url, maintenance_worker_id, created_at, updated_at"
         )
         .single();
       if (error) throw error;
@@ -160,6 +202,7 @@ export default function TenantMaintenanceRequestsScreen() {
       setDescription("");
       setUrgency("medium");
       setPhotoUri(null);
+      setActiveTab("requests");
       Alert.alert("Submitted", "Your maintenance request has been submitted.");
     } catch (e) {
       console.error("Error submitting maintenance request", e);
@@ -199,105 +242,168 @@ export default function TenantMaintenanceRequestsScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-      <Text style={styles.title}>Maintenance Requests</Text>
-      <Text style={styles.subtitle}>Describe any issues with your unit.</Text>
-
-      <Text style={styles.label}>Title</Text>
-      <TextInput
-        style={styles.input}
-        value={title}
-        onChangeText={setTitle}
-        placeholder="Short summary (e.g. 'Leaky faucet in kitchen')"
-        placeholderTextColor={colors.placeholder}
-      />
-
-      <Text style={styles.label}>Urgency</Text>
-      <View style={styles.urgencyRow}>
-        {(["low", "medium", "high"] as const).map((u) => (
-          <TouchableOpacity
-            key={u}
-            style={[styles.urgencyChip, urgency === u && styles.urgencyChipActive]}
-            onPress={() => setUrgency(u)}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.urgencyChipText, urgency === u && styles.urgencyChipTextActive]}>
-              {u === "low" ? "Low" : u === "medium" ? "Medium" : "High"}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <Text style={styles.label}>Photo (optional)</Text>
-      <TouchableOpacity style={styles.photoButton} onPress={handlePickPhoto} activeOpacity={0.85}>
-        {photoUri ? (
-          <Image source={{ uri: photoUri }} style={styles.photoPreview} />
-        ) : (
-          <Text style={styles.photoButtonText}>📷 Add photo</Text>
-        )}
-      </TouchableOpacity>
-      {photoUri ? (
-        <TouchableOpacity onPress={() => setPhotoUri(null)} style={styles.removePhoto}>
-          <Text style={styles.removePhotoText}>Remove photo</Text>
-        </TouchableOpacity>
-      ) : null}
-
-      <Text style={styles.label}>Description</Text>
-      <TextInput
-        style={[styles.input, styles.multiline]}
-        value={description}
-        onChangeText={setDescription}
-        placeholder="Describe the problem and when you noticed it."
-        placeholderTextColor={colors.placeholder}
-        multiline
-        numberOfLines={4}
-      />
-
-      <TouchableOpacity
-        style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
-        onPress={handleSubmit}
-        disabled={submitting}
-        activeOpacity={0.85}
-      >
-        {submitting ? (
-          <ActivityIndicator color={colors.onPrimary} />
-        ) : (
-          <Text style={styles.submitButtonText}>Submit request</Text>
-        )}
-      </TouchableOpacity>
-
-      <View style={styles.listSection}>
-        <Text style={styles.sectionTitle}>Your requests</Text>
-        {requests.length === 0 ? (
-          <Text style={styles.emptySubtitle}>
-            You haven't submitted any maintenance requests yet.
+    <View style={styles.screen}>
+      <View style={styles.tabs}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === "create" && styles.tabActive]}
+          onPress={() => setActiveTab("create")}
+          activeOpacity={0.85}
+        >
+          <Text style={[styles.tabText, activeTab === "create" && styles.tabTextActive]}>
+            New request
           </Text>
-        ) : (
-          requests.map((r) => (
-            <View key={r.request_id} style={styles.card}>
-              <View style={styles.cardHeader}>
-                <Text style={styles.cardTitle}>{r.title}</Text>
-                <Text style={styles.statusBadge}>
-                  {(r.status ?? "open").toUpperCase()}
-                </Text>
-              </View>
-              <Text style={styles.cardMeta}>
-                {formatDate(r.created_at)}
-                {r.urgency ? ` · ${(r.urgency as string).charAt(0).toUpperCase() + (r.urgency as string).slice(1)}` : ""}
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === "requests" && styles.tabActive]}
+          onPress={() => setActiveTab("requests")}
+          activeOpacity={0.85}
+        >
+          <Text style={[styles.tabText, activeTab === "requests" && styles.tabTextActive]}>
+            Your requests
+          </Text>
+          {requests.length > 0 ? (
+            <View style={[styles.tabBadge, activeTab === "requests" && styles.tabBadgeActive]}>
+              <Text
+                style={[styles.tabBadgeText, activeTab === "requests" && styles.tabBadgeTextActive]}
+              >
+                {requests.length > 99 ? "99+" : requests.length}
               </Text>
-              {r.photo_url ? (
-                <Image source={{ uri: r.photo_url }} style={styles.cardPhoto} />
-              ) : null}
-              {r.description ? (
-                <Text style={styles.cardDescription} numberOfLines={3}>
-                  {r.description}
-                </Text>
-              ) : null}
             </View>
-          ))
-        )}
+          ) : null}
+        </TouchableOpacity>
       </View>
-    </ScrollView>
+
+      {activeTab === "create" ? (
+        <ScrollView
+          style={styles.tabScroll}
+          contentContainerStyle={styles.createScrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Text style={styles.subtitle}>Describe any issues with your unit.</Text>
+
+          <Text style={styles.labelFirst}>Title</Text>
+          <TextInput
+            style={styles.input}
+            value={title}
+            onChangeText={setTitle}
+            placeholder="Short summary (e.g. 'Leaky faucet in kitchen')"
+            placeholderTextColor={colors.placeholder}
+          />
+
+          <Text style={styles.label}>Urgency</Text>
+          <View style={styles.urgencyRow}>
+            {(["low", "medium", "high"] as const).map((u) => (
+              <TouchableOpacity
+                key={u}
+                style={[styles.urgencyChip, urgency === u && styles.urgencyChipActive]}
+                onPress={() => setUrgency(u)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.urgencyChipText, urgency === u && styles.urgencyChipTextActive]}>
+                  {u === "low" ? "Low" : u === "medium" ? "Medium" : "High"}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={styles.label}>Photo (optional)</Text>
+          <TouchableOpacity style={styles.photoButton} onPress={handlePickPhoto} activeOpacity={0.85}>
+            {photoUri ? (
+              <Image source={{ uri: photoUri }} style={styles.photoPreview} />
+            ) : (
+              <Text style={styles.photoButtonText}>📷 Add photo</Text>
+            )}
+          </TouchableOpacity>
+          {photoUri ? (
+            <TouchableOpacity onPress={() => setPhotoUri(null)} style={styles.removePhoto}>
+              <Text style={styles.removePhotoText}>Remove photo</Text>
+            </TouchableOpacity>
+          ) : null}
+
+          <Text style={styles.label}>Description</Text>
+          <TextInput
+            style={[styles.input, styles.multiline]}
+            value={description}
+            onChangeText={setDescription}
+            placeholder="Describe the problem and when you noticed it."
+            placeholderTextColor={colors.placeholder}
+            multiline
+            numberOfLines={4}
+          />
+
+          <TouchableOpacity
+            style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
+            onPress={handleSubmit}
+            disabled={submitting}
+            activeOpacity={0.85}
+          >
+            {submitting ? (
+              <ActivityIndicator color={colors.onPrimary} />
+            ) : (
+              <Text style={styles.submitButtonText}>Submit request</Text>
+            )}
+          </TouchableOpacity>
+        </ScrollView>
+      ) : (
+        <ScrollView
+          style={styles.tabScroll}
+          contentContainerStyle={styles.listScrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          {requests.length === 0 ? (
+            <View style={styles.listEmpty}>
+              <Text style={styles.emptySubtitle}>
+                You haven’t submitted any maintenance requests yet. Use the New request tab to
+                create one.
+              </Text>
+            </View>
+          ) : (
+            requests.map((r) => {
+              const badge = getMaintenanceCardBadge(r.status, r.maintenance_worker_id);
+              const urgencyColor = urgencySeverityColor(colors, r.urgency);
+              return (
+              <View key={r.request_id} style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <Text style={styles.cardTitle}>{r.title}</Text>
+                  <Text
+                    style={[
+                      styles.statusBadge,
+                      badge.variant === "completed" && styles.statusBadgeCompleted,
+                      badge.variant === "assigned" && styles.statusBadgeAssigned,
+                      badge.variant === "pending" && styles.statusBadgePending,
+                      badge.variant === "cancelled" && styles.statusBadgeCancelled,
+                    ]}
+                  >
+                    {badge.label}
+                  </Text>
+                </View>
+                <View style={styles.cardMetaRow}>
+                  <Text style={styles.cardMetaText}>{formatDate(r.created_at)}</Text>
+                  {r.urgency ? (
+                    <>
+                      <Text style={styles.cardMetaText}> · </Text>
+                      <View style={[styles.urgencyDot, { backgroundColor: urgencyColor }]} />
+                      <Text style={[styles.cardMetaText, styles.urgencyLabelSpacing]}>
+                        {formatUrgencyLabel(r.urgency)}
+                      </Text>
+                    </>
+                  ) : null}
+                </View>
+                {r.photo_url ? (
+                  <Image source={{ uri: r.photo_url }} style={styles.cardPhoto} />
+                ) : null}
+                {r.description ? (
+                  <Text style={styles.cardDescription} numberOfLines={3}>
+                    {r.description}
+                  </Text>
+                ) : null}
+              </View>
+            );
+            })
+          )}
+        </ScrollView>
+      )}
+    </View>
   );
 }
 
@@ -310,21 +416,85 @@ function createStyles(colors: AppThemeColors) {
       backgroundColor: colors.bgSecondary,
       padding: 24,
     },
-    scrollContent: {
-      padding: 20,
-      paddingBottom: 32,
+    screen: {
+      flex: 1,
       backgroundColor: colors.bgSecondary,
     },
     title: {
       fontSize: 22,
       fontWeight: "700",
       color: colors.text,
+      paddingHorizontal: 20,
+      paddingTop: 16,
       marginBottom: 4,
+    },
+    tabs: {
+      flexDirection: "row",
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      paddingHorizontal: 8,
+    },
+    tab: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 14,
+      gap: 6,
+    },
+    tabActive: {
+      borderBottomWidth: 2,
+      borderBottomColor: colors.tabIndicator,
+    },
+    tabText: {
+      fontSize: 15,
+      fontWeight: "500",
+      color: colors.tabInactive,
+    },
+    tabTextActive: {
+      color: colors.tabActive,
+      fontWeight: "600",
+    },
+    tabBadge: {
+      backgroundColor: colors.borderStrong,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 5,
+      minWidth: 22,
+      alignItems: "center",
+    },
+    tabBadgeActive: {
+      backgroundColor: colors.primaryPressed,
+    },
+    tabBadgeText: {
+      fontSize: 12,
+      color: colors.tabInactive,
+      fontWeight: "600",
+    },
+    tabBadgeTextActive: {
+      color: colors.onPrimary,
+    },
+    tabScroll: {
+      flex: 1,
+    },
+    createScrollContent: {
+      padding: 20,
+      paddingBottom: 32,
+    },
+    listScrollContent: {
+      padding: 20,
+      paddingBottom: 32,
     },
     subtitle: {
       fontSize: 14,
       color: colors.textMuted,
       marginBottom: 16,
+    },
+    labelFirst: {
+      fontSize: 14,
+      fontWeight: "500",
+      color: colors.accentText,
+      marginBottom: 6,
     },
     label: {
       fontSize: 14,
@@ -408,6 +578,9 @@ function createStyles(colors: AppThemeColors) {
       marginVertical: 6,
       backgroundColor: colors.border,
     },
+    listEmpty: {
+      paddingVertical: 32,
+    },
     submitButton: {
       backgroundColor: colors.primary,
       paddingVertical: 16,
@@ -422,15 +595,6 @@ function createStyles(colors: AppThemeColors) {
       color: colors.onPrimary,
       fontSize: 16,
       fontWeight: "600",
-    },
-    listSection: {
-      marginTop: 32,
-    },
-    sectionTitle: {
-      fontSize: 16,
-      fontWeight: "600",
-      color: colors.textSecondary,
-      marginBottom: 12,
     },
     emptyTitle: {
       fontSize: 20,
@@ -470,17 +634,46 @@ function createStyles(colors: AppThemeColors) {
     },
     statusBadge: {
       fontSize: 11,
-      color: colors.badgeUrgentText,
-      backgroundColor: colors.badgeUrgentBg,
+      fontWeight: "600",
       paddingHorizontal: 8,
       paddingVertical: 2,
       borderRadius: 999,
       overflow: "hidden",
     },
-    cardMeta: {
+    statusBadgeCompleted: {
+      backgroundColor: colors.success,
+      color: colors.onPrimary,
+    },
+    statusBadgeAssigned: {
+      backgroundColor: colors.selectedAccentBg,
+      color: colors.accentText,
+    },
+    statusBadgePending: {
+      backgroundColor: colors.badgeUrgentBg,
+      color: colors.badgeUrgentText,
+    },
+    statusBadgeCancelled: {
+      backgroundColor: colors.badgeStatusBg,
+      color: colors.textMuted,
+    },
+    cardMetaRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      flexWrap: "wrap",
+      marginBottom: 4,
+    },
+    cardMetaText: {
       fontSize: 12,
       color: colors.textMuted,
-      marginBottom: 4,
+    },
+    urgencyDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      marginLeft: 2,
+    },
+    urgencyLabelSpacing: {
+      marginLeft: 4,
     },
     cardDescription: {
       fontSize: 13,

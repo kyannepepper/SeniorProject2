@@ -4,7 +4,6 @@ import { supabase } from "@/lib/supabase";
 import type { AppThemeColors } from "@/lib/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -20,16 +19,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const INCOME_GROWTH_IMAGE = require("../../assets/images/income-growth.png");
-
-function withAlpha(hex: string, alpha: number): string {
-  const cleaned = hex.replace("#", "");
-  if (cleaned.length !== 6) return hex;
-  const r = parseInt(cleaned.slice(0, 2), 16);
-  const g = parseInt(cleaned.slice(2, 4), 16);
-  const b = parseInt(cleaned.slice(4, 6), 16);
-  return `rgba(${r},${g},${b},${alpha})`;
-}
+const INCOME_GROWTH_IMAGE = require("../../assets/images/b-graph.png");
 
 function paidLocalYmd(iso: string): string {
   try {
@@ -42,6 +32,41 @@ function paidLocalYmd(iso: string): string {
   } catch {
     return "";
   }
+}
+
+/** Calendar day YYYY-MM-DD in local time */
+function localYmd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * Payments that should notify the landlord: (1) paid after they last opened the payments hub,
+ * or (2) unpaid and past due, and they haven't opened the hub on/after the due date yet.
+ */
+function countLandlordPaymentAttention(
+  rows: { date_paid: string | null; date_due: string }[],
+  lastViewedAt: string | null
+): number {
+  const today = localYmd(new Date());
+  const lastDay = lastViewedAt ? localYmd(new Date(lastViewedAt)) : null;
+  let n = 0;
+  for (const p of rows) {
+    if (p.date_paid) {
+      if (lastViewedAt && new Date(p.date_paid) > new Date(lastViewedAt)) n++;
+      continue;
+    }
+    const dueDay = String(p.date_due).slice(0, 10);
+    if (dueDay >= today) continue;
+    if (lastDay === null) {
+      n++;
+      continue;
+    }
+    if (lastDay < dueDay) n++;
+  }
+  return n;
 }
 
 function sumCollectedIncome(
@@ -78,7 +103,7 @@ export default function LandlordDashboard() {
   const [appCount, setAppCount] = useState(0);
   const [maintenanceOpenCount, setMaintenanceOpenCount] = useState(0);
   const [maintenanceUnassignedCount, setMaintenanceUnassignedCount] = useState(0);
-  const [unpaidPaymentCount, setUnpaidPaymentCount] = useState(0);
+  const [paymentHubAttention, setPaymentHubAttention] = useState(0);
 
   const name =
     (session?.user?.user_metadata as { full_name?: string } | undefined)?.full_name ??
@@ -147,7 +172,7 @@ export default function LandlordDashboard() {
       setAppCount(0);
       setMaintenanceOpenCount(0);
       setMaintenanceUnassignedCount(0);
-      setUnpaidPaymentCount(0);
+      setPaymentHubAttention(0);
       return;
     }
     try {
@@ -160,7 +185,7 @@ export default function LandlordDashboard() {
         setAppCount(0);
         setMaintenanceOpenCount(0);
         setMaintenanceUnassignedCount(0);
-        setUnpaidPaymentCount(0);
+        setPaymentHubAttention(0);
         return;
       }
 
@@ -170,7 +195,16 @@ export default function LandlordDashboard() {
         .in("property_id", propertyIds);
       const tenantIds = (tenantsData ?? []).map((t: { tenant_id: string }) => t.tenant_id);
 
-      const [appsRes, maintRes, unpaidRes] = await Promise.all([
+      const { data: landlordRow } = await supabase
+        .from("landlords")
+        .select("last_viewed_payments_at")
+        .eq("landlord_id", landlordId)
+        .maybeSingle();
+
+      const lastViewed = (landlordRow as { last_viewed_payments_at?: string | null } | null)
+        ?.last_viewed_payments_at;
+
+      const [appsRes, maintRes, payRowsRes] = await Promise.all([
         supabase
           .from("applications")
           .select("application_id", { count: "exact", head: true })
@@ -180,12 +214,8 @@ export default function LandlordDashboard() {
           .select("request_id, status, maintenance_worker_id")
           .in("property_id", propertyIds),
         tenantIds.length > 0
-          ? supabase
-              .from("payments")
-              .select("payment_id", { count: "exact", head: true })
-              .in("tenant_id", tenantIds)
-              .is("date_paid", null)
-          : Promise.resolve({ count: 0 }),
+          ? supabase.from("payments").select("date_paid, date_due").in("tenant_id", tenantIds)
+          : Promise.resolve({ data: [] as { date_paid: string | null; date_due: string }[] }),
       ]);
 
       const openMaint = (maintRes.data ?? []).filter(
@@ -199,12 +229,13 @@ export default function LandlordDashboard() {
       setAppCount(appsRes.count ?? 0);
       setMaintenanceOpenCount(openMaint);
       setMaintenanceUnassignedCount(unassignedMaint);
-      setUnpaidPaymentCount(unpaidRes.count ?? 0);
+      const payRows = (payRowsRes.data ?? []) as { date_paid: string | null; date_due: string }[];
+      setPaymentHubAttention(countLandlordPaymentAttention(payRows, lastViewed ?? null));
     } catch {
       setAppCount(0);
       setMaintenanceOpenCount(0);
       setMaintenanceUnassignedCount(0);
-      setUnpaidPaymentCount(0);
+      setPaymentHubAttention(0);
     }
   }, [landlordId]);
 
@@ -221,8 +252,6 @@ export default function LandlordDashboard() {
       loadQuickCounts();
     }
   }, [authLoading, loadIncome, loadQuickCounts]);
-
-  const quickGradient = ["#f472b6", "#a855f7"] as const;
 
   const items: { label: string; route: string; badgeCount?: number }[] = [
     { label: "Properties", route: "/landlord/properties" },
@@ -255,7 +284,6 @@ export default function LandlordDashboard() {
             </TouchableOpacity>
           </View>
           <Text style={styles.heroTitle}>Welcome{name ? `, ${name}` : ""}</Text>
-          <Text style={styles.heroTagline}>Properties, tenants, and rent — in one place.</Text>
         </View>
 
         <View style={styles.content}>
@@ -265,40 +293,23 @@ export default function LandlordDashboard() {
               <ActivityIndicator color={colors.primary} style={styles.incomeSpinner} />
             ) : (
               <View style={styles.incomeRow}>
-                <View style={styles.incomeTileWrap}>
-                  <View style={styles.incomeBlock}>
-                    <Image
-                      source={INCOME_GROWTH_IMAGE}
-                      style={styles.incomeGraphImage}
-                      resizeMode="contain"
-                    />
-                    <LinearGradient
-                      colors={[withAlpha(colors.primary, .8), withAlpha(colors.success, .8)]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.incomeGradientOverlay}
-                    />
-                    <Text style={styles.incomeLabel}>This month</Text>
-                    <Text style={styles.incomeValue}>
+                <View style={styles.incomeChartOnly}>
+                  <Image
+                    source={INCOME_GROWTH_IMAGE}
+                    style={styles.incomeChartImageOnly}
+                    resizeMode="contain"
+                  />
+                </View>
+                <View style={styles.incomeAnalyticsColumn}>
+                  <View style={styles.incomeStatBlock}>
+                    <Text style={styles.incomeStatLabel}>This month</Text>
+                    <Text style={styles.incomeStatValue}>
                       ${(monthlyIncome ?? 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}
                     </Text>
                   </View>
-                </View>
-                <View style={styles.incomeTileWrap}>
-                  <View style={styles.incomeBlock}>
-                    <Image
-                      source={INCOME_GROWTH_IMAGE}
-                      style={styles.incomeGraphImage}
-                      resizeMode="contain"
-                    />
-                    <LinearGradient
-                      colors={[withAlpha(colors.primary, .8), withAlpha(colors.success, .8)]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.incomeGradientOverlay}
-                    />
-                    <Text style={styles.incomeLabel}>This year</Text>
-                    <Text style={styles.incomeValue}>
+                  <View style={styles.incomeStatBlock}>
+                    <Text style={styles.incomeStatLabel}>This year</Text>
+                    <Text style={styles.incomeStatValue}>
                       ${(yearlyIncome ?? 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}
                     </Text>
                   </View>
@@ -316,20 +327,19 @@ export default function LandlordDashboard() {
               onPress={() => router.push("/landlord/applications" as any)}
               activeOpacity={0.88}
               accessibilityRole="button"
-              accessibilityLabel={`Applications, ${appCount} pending`}
+              accessibilityLabel={
+                appCount > 0 ? `Applications, ${appCount} to review` : "Applications"
+              }
             >
               <View style={styles.quickTileShell}>
-                <LinearGradient
-                  colors={[...quickGradient]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.quickTile}
-                >
+                <View style={[styles.quickTile, { backgroundColor: "#373737" }]}>
                   <Ionicons name="document-text-outline" size={28} color="#ffffff" />
-                </LinearGradient>
-                <View style={styles.quickBadge}>
-                  <Text style={styles.quickBadgeText}>{appCount > 99 ? "99+" : appCount}</Text>
                 </View>
+                {appCount > 0 ? (
+                  <View style={styles.quickBadge}>
+                    <Text style={styles.quickBadgeText}>{appCount > 99 ? "99+" : appCount}</Text>
+                  </View>
+                ) : null}
               </View>
               <Text style={styles.quickCaption}>Applications</Text>
             </TouchableOpacity>
@@ -339,22 +349,23 @@ export default function LandlordDashboard() {
             onPress={() => router.push("/landlord/maintenance-requests" as any)}
             activeOpacity={0.88}
             accessibilityRole="button"
-            accessibilityLabel={`Maintenance requests, ${maintenanceOpenCount} open`}
+            accessibilityLabel={
+              maintenanceOpenCount > 0
+                ? `Maintenance requests, ${maintenanceOpenCount} open`
+                : "Maintenance requests"
+            }
           >
             <View style={styles.quickTileShell}>
-              <LinearGradient
-                colors={[...quickGradient]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.quickTile}
-              >
-              <Ionicons name="construct-outline" size={28} color="#ffffff" />
-              </LinearGradient>
-              <View style={styles.quickBadge}>
-                <Text style={styles.quickBadgeText}>
-                  {maintenanceOpenCount > 99 ? "99+" : maintenanceOpenCount}
-                </Text>
+              <View style={[styles.quickTile, { backgroundColor: "#E99C45" }]}>
+                <Ionicons name="construct-outline" size={28} color="#ffffff" />
               </View>
+              {maintenanceOpenCount > 0 ? (
+                <View style={styles.quickBadge}>
+                  <Text style={styles.quickBadgeText}>
+                    {maintenanceOpenCount > 99 ? "99+" : maintenanceOpenCount}
+                  </Text>
+                </View>
+              ) : null}
             </View>
             <Text style={styles.quickCaption}>Maintenance</Text>
           </TouchableOpacity>
@@ -364,22 +375,17 @@ export default function LandlordDashboard() {
             onPress={() => router.push("/landlord/payments" as any)}
             activeOpacity={0.88}
             accessibilityRole="button"
-            accessibilityLabel={`Payments, ${unpaidPaymentCount} unpaid`}
+            accessibilityLabel={
+              paymentHubAttention > 0
+                ? "Payments, new payment activity"
+                : "Payments"
+            }
           >
             <View style={styles.quickTileShell}>
-              <LinearGradient
-                colors={[...quickGradient]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.quickTile}
-              >
-              <Ionicons name="wallet-outline" size={28} color="#ffffff" />
-              </LinearGradient>
-              <View style={styles.quickBadge}>
-                <Text style={styles.quickBadgeText}>
-                  {unpaidPaymentCount > 99 ? "99+" : unpaidPaymentCount}
-                </Text>
+              <View style={[styles.quickTile, { backgroundColor: "#0EAFB9" }]}>
+                <Ionicons name="wallet-outline" size={28} color="#ffffff" />
               </View>
+              {paymentHubAttention > 0 ? <View style={styles.quickBadgeDot} /> : null}
             </View>
             <Text style={styles.quickCaption}>Payments</Text>
           </TouchableOpacity>
@@ -496,13 +502,6 @@ function createStyles(colors: AppThemeColors) {
       marginBottom: 6,
       letterSpacing: -0.5,
     },
-    heroTagline: {
-      fontSize: 15,
-      fontWeight: "500",
-      color: colors.onPrimary,
-      opacity: 0.92,
-      lineHeight: 22,
-    },
     incomeSection: {
       marginBottom: 22,
     },
@@ -520,87 +519,54 @@ function createStyles(colors: AppThemeColors) {
     incomeRow: {
       flexDirection: "row",
       alignItems: "stretch",
-      gap: 12,
-    },
-    incomeTileWrap: {
-      flex: 1,
-      borderRadius: 5,
-      aspectRatio: 1,
-      justifyContent: "center",
-      backgroundColor: "rgba(0,0,0,0.01)", // helps shadows render consistently
-      ...Platform.select({
-        ios: {
-          shadowColor: "rgba(0, 0, 0, 0.96)",
-          shadowOffset: { width: 2, height: 2 },
-          shadowOpacity: 0.6,
-          shadowRadius: 10,
-        },
-        android: { elevation: 2 },
-        default: {},
-      }),
-      overflow: "visible",
-    },
-    incomeBlock: {
-      flex: 1,
-      borderRadius: 5,
-      justifyContent: "center",
-      alignItems: "center",
-      paddingVertical: 16,
-      paddingHorizontal: 12,
-      overflow: "hidden",
-      position: "relative",
-    },
-    incomeGraphImage: {
-      position: "absolute",
-      left: 0,
-      top: 12,
-      right: 0,
-      bottom: 0,
+      gap: 16,
       width: "100%",
-      height: "100%",
-      opacity: 1,
-      zIndex: 1,
-      transform: [],
+      alignSelf: "stretch",
     },
-    incomeLabel: {
-      fontSize: 11,
+    incomeChartOnly: {
+      flex: 1,
+      minWidth: 0,
+      justifyContent: "center",
+      alignItems: "flex-start",
+    },
+    incomeChartImageOnly: {
+      width: "100%",
+      maxWidth: 168,
+      height: 168,
+    },
+    incomeAnalyticsColumn: {
+      flex: 1,
+      minWidth: 0,
+      gap: 22,
+      justifyContent: "center",
+      alignItems: "flex-start",
+      alignSelf: "stretch",
+    },
+    incomeStatBlock: {
+      alignItems: "flex-start",
+      width: "100%",
+    },
+    incomeStatLabel: {
+      fontSize: 13,
       fontWeight: "600",
-      color: colors.onPrimary,
-      opacity: 0.92,
+      color: colors.textMuted,
       marginBottom: 6,
       textTransform: "uppercase",
-      letterSpacing: 0.3,
-      textAlign: "center",
-      textShadowColor: "rgba(0,0,0,0.55)",
-      textShadowOffset: { width: 0, height: 2 },
-      textShadowRadius: 6,
-      zIndex: 2,
+      letterSpacing: 0.4,
+      textAlign: "left",
     },
-    incomeValue: {
-      fontSize: 24,
+    incomeStatValue: {
+      fontSize: 38,
       fontWeight: "800",
-      color: colors.onPrimary,
-      letterSpacing: -0.5,
-      textShadowColor: "rgba(0,0,0,0.6)",
-      textShadowOffset: { width: 0, height: 2 },
-      textShadowRadius: 8,
-      textAlign: "center",
-      zIndex: 2,
+      color: colors.text,
+      letterSpacing: -1,
+      textAlign: "left",
     },
     incomeHint: {
       fontSize: 11,
       color: colors.textMuted,
       marginTop: 14,
       lineHeight: 16,
-    },
-    incomeGradientOverlay: {
-      position: "absolute",
-      left: 0,
-      top: 0,
-      right: 0,
-      bottom: 0,
-      opacity: 1,
-      zIndex: 1,
     },
     sectionLabel: {
       fontSize: 12,
@@ -624,6 +590,17 @@ function createStyles(colors: AppThemeColors) {
       width: "100%",
       position: "relative",
       overflow: "visible",
+      borderRadius: 5,
+      ...Platform.select({
+        ios: {
+          shadowColor: "rgba(15, 23, 42, 0.22)",
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 1,
+          shadowRadius: 10,
+        },
+        android: { elevation: 5 },
+        default: {},
+      }),
     },
     quickTile: {
       width: "100%",
@@ -659,6 +636,27 @@ function createStyles(colors: AppThemeColors) {
       fontSize: 11,
       fontWeight: "800",
       color: "#7c3aed",
+    },
+    quickBadgeDot: {
+      position: "absolute",
+      top: -4,
+      right: -4,
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+      backgroundColor: colors.danger,
+      borderWidth: 2,
+      borderColor: "#ffffff",
+      ...Platform.select({
+        ios: {
+          shadowColor: "rgba(0,0,0,0.35)",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.22,
+          shadowRadius: 4,
+        },
+        android: { elevation: 3 },
+        default: {},
+      }),
     },
     quickCaption: {
       marginTop: 8,
