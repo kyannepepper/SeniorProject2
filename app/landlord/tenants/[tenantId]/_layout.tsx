@@ -4,7 +4,7 @@ import { Stack, useRouter } from "expo-router";
 import { useMemo } from "react";
 import { Pressable } from "react-native";
 
-export default function LandlordLayout() {
+export default function LandlordTenantIdLayout() {
   const { colors } = useTheme();
   const router = useRouter();
   const screenOptions = useMemo(
@@ -33,23 +33,8 @@ export default function LandlordLayout() {
 
   return (
     <Stack screenOptions={screenOptions}>
-      <Stack.Screen name="index" options={{ headerShown: false }} />
-      <Stack.Screen name="properties" />
-      <Stack.Screen name="add-property" />
-      <Stack.Screen name="edit-property" />
-      <Stack.Screen name="tenants" />
-      <Stack.Screen name="tenants/[tenantId]" options={{ headerShown: false }} />
-      <Stack.Screen name="maintenance-workers" />
-      <Stack.Screen name="maintenance-requests" />
-      <Stack.Screen name="maintenance-request-detail" />
-      <Stack.Screen name="leases" />
-      <Stack.Screen name="lease-detail" />
-      <Stack.Screen name="add-lease" />
-      <Stack.Screen name="applications" />
-      <Stack.Screen name="application-detail" />
-      <Stack.Screen name="payments" />
-      <Stack.Screen name="settings" />
+      <Stack.Screen name="index" options={{ title: "Tenant" }} />
+      <Stack.Screen name="payment-history" options={{ title: "Payment history" }} />
     </Stack>
   );
 }
-

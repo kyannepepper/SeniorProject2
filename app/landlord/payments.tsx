@@ -16,7 +16,7 @@ import { panelElevation } from "@/lib/contrastScreenStyles";
 import type { AppThemeColors } from "@/lib/theme";
 import { supabase } from "@/lib/supabase";
 import { TenantPaymentHistoryRow } from "@/components/TenantPaymentHistoryRow";
-import type { PaidPaymentRow } from "@/lib/paymentHistoryUtils";
+import { isPaymentLateStatus, type PaidPaymentRow } from "@/lib/paymentHistoryUtils";
 
 type PaymentRow = {
   payment_id: string;
@@ -182,20 +182,34 @@ export default function LandlordPaymentsScreen() {
       {unpaid.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Due or unpaid</Text>
-          {unpaid.map((p) => (
-            <TouchableOpacity
-              key={p.payment_id}
-              style={styles.unpaidCard}
-              onPress={() => router.push(`/landlord/tenants/${p.tenant_id}` as any)}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.tenantName}>{p.tenant_name}</Text>
-              <Text style={styles.amount}>
-                ${(p.amount_due + p.late_fee).toFixed(0)} due {formatDue(p.date_due)}
-              </Text>
-              <Text style={styles.hint}>Tap to open tenant</Text>
-            </TouchableOpacity>
-          ))}
+          {unpaid.map((p) => {
+            const row = {
+              payment_id: p.payment_id,
+              amount_due: p.amount_due,
+              late_fee: p.late_fee,
+              date_due: p.date_due,
+              date_paid: p.date_paid,
+            };
+            const showLate =
+              isPaymentLateStatus(row) || Number(p.late_fee) > 0;
+            return (
+              <TouchableOpacity
+                key={p.payment_id}
+                style={styles.unpaidCard}
+                onPress={() => router.push(`/landlord/tenants/${p.tenant_id}` as any)}
+                activeOpacity={0.85}
+              >
+                <View style={styles.unpaidCardTop}>
+                  <Text style={styles.tenantName}>{p.tenant_name}</Text>
+                  {showLate ? <Text style={styles.latePill}>Late</Text> : null}
+                </View>
+                <Text style={styles.amount}>
+                  ${(p.amount_due + p.late_fee).toFixed(0)} due {formatDue(p.date_due)}
+                </Text>
+                <Text style={styles.hint}>Tap to open tenant</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       )}
 
@@ -272,11 +286,25 @@ function createStyles(colors: AppThemeColors) {
       borderColor: colors.borderStrong,
       ...panelElevation(colors),
     },
+    unpaidCardTop: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+      marginBottom: 4,
+    },
     tenantName: {
       fontSize: 16,
       fontWeight: "600",
       color: colors.text,
-      marginBottom: 4,
+      flex: 1,
+    },
+    latePill: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.danger,
+      textTransform: "uppercase",
+      letterSpacing: 0.6,
     },
     amount: {
       fontSize: 15,

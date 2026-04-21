@@ -69,6 +69,18 @@ function countLandlordPaymentAttention(
   return n;
 }
 
+/** Unpaid rows whose due date is before today (always surface on the dashboard until paid). */
+function countUnpaidPastDue(rows: { date_paid: string | null; date_due: string }[]): number {
+  const today = localYmd(new Date());
+  let n = 0;
+  for (const p of rows) {
+    if (p.date_paid) continue;
+    const dueDay = String(p.date_due).slice(0, 10);
+    if (dueDay < today) n++;
+  }
+  return n;
+}
+
 function sumCollectedIncome(
   rows: { amount_due: number; late_fee: number; date_paid: string }[],
   ref: Date
@@ -104,11 +116,18 @@ export default function LandlordDashboard() {
   const [maintenanceOpenCount, setMaintenanceOpenCount] = useState(0);
   const [maintenanceUnassignedCount, setMaintenanceUnassignedCount] = useState(0);
   const [paymentHubAttention, setPaymentHubAttention] = useState(0);
+  const [lateFeePaymentCount, setLateFeePaymentCount] = useState(0);
+  const [unpaidPastDueCount, setUnpaidPastDueCount] = useState(0);
 
   const name =
     (session?.user?.user_metadata as { full_name?: string } | undefined)?.full_name ??
     session?.user?.email ??
     "";
+
+  const paymentsQuickBadgeCount = useMemo(
+    () => Math.max(lateFeePaymentCount, unpaidPastDueCount, paymentHubAttention),
+    [lateFeePaymentCount, unpaidPastDueCount, paymentHubAttention]
+  );
 
   useEffect(() => {
     async function fetchTenantsWithoutLease() {
@@ -173,6 +192,8 @@ export default function LandlordDashboard() {
       setMaintenanceOpenCount(0);
       setMaintenanceUnassignedCount(0);
       setPaymentHubAttention(0);
+      setLateFeePaymentCount(0);
+      setUnpaidPastDueCount(0);
       return;
     }
     try {
@@ -186,6 +207,8 @@ export default function LandlordDashboard() {
         setMaintenanceOpenCount(0);
         setMaintenanceUnassignedCount(0);
         setPaymentHubAttention(0);
+        setLateFeePaymentCount(0);
+        setUnpaidPastDueCount(0);
         return;
       }
 
@@ -204,7 +227,7 @@ export default function LandlordDashboard() {
       const lastViewed = (landlordRow as { last_viewed_payments_at?: string | null } | null)
         ?.last_viewed_payments_at;
 
-      const [appsRes, maintRes, payRowsRes] = await Promise.all([
+      const [appsRes, maintRes, payRowsRes, lateFeeCountRes] = await Promise.all([
         supabase
           .from("applications")
           .select("application_id", { count: "exact", head: true })
@@ -216,6 +239,13 @@ export default function LandlordDashboard() {
         tenantIds.length > 0
           ? supabase.from("payments").select("date_paid, date_due").in("tenant_id", tenantIds)
           : Promise.resolve({ data: [] as { date_paid: string | null; date_due: string }[] }),
+        tenantIds.length > 0
+          ? supabase
+              .from("payments")
+              .select("payment_id", { count: "exact", head: true })
+              .in("tenant_id", tenantIds)
+              .gt("late_fee", 0)
+          : Promise.resolve({ count: 0 }),
       ]);
 
       const openMaint = (maintRes.data ?? []).filter(
@@ -231,11 +261,15 @@ export default function LandlordDashboard() {
       setMaintenanceUnassignedCount(unassignedMaint);
       const payRows = (payRowsRes.data ?? []) as { date_paid: string | null; date_due: string }[];
       setPaymentHubAttention(countLandlordPaymentAttention(payRows, lastViewed ?? null));
+      setLateFeePaymentCount(lateFeeCountRes.count ?? 0);
+      setUnpaidPastDueCount(countUnpaidPastDue(payRows));
     } catch {
       setAppCount(0);
       setMaintenanceOpenCount(0);
       setMaintenanceUnassignedCount(0);
       setPaymentHubAttention(0);
+      setLateFeePaymentCount(0);
+      setUnpaidPastDueCount(0);
     }
   }, [landlordId]);
 
@@ -376,8 +410,8 @@ export default function LandlordDashboard() {
             activeOpacity={0.88}
             accessibilityRole="button"
             accessibilityLabel={
-              paymentHubAttention > 0
-                ? "Payments, new payment activity"
+              paymentsQuickBadgeCount > 0
+                ? `Payments, ${paymentsQuickBadgeCount} need attention`
                 : "Payments"
             }
           >
@@ -385,7 +419,13 @@ export default function LandlordDashboard() {
               <View style={[styles.quickTile, { backgroundColor: "#0EAFB9" }]}>
                 <Ionicons name="wallet-outline" size={28} color="#ffffff" />
               </View>
-              {paymentHubAttention > 0 ? <View style={styles.quickBadgeDot} /> : null}
+              {paymentsQuickBadgeCount > 0 ? (
+                <View style={styles.quickBadge}>
+                  <Text style={styles.quickBadgeText}>
+                    {paymentsQuickBadgeCount > 99 ? "99+" : paymentsQuickBadgeCount}
+                  </Text>
+                </View>
+              ) : null}
             </View>
             <Text style={styles.quickCaption}>Payments</Text>
           </TouchableOpacity>
@@ -580,17 +620,22 @@ function createStyles(colors: AppThemeColors) {
       flexDirection: "row",
       gap: 10,
       marginBottom: 22,
+      overflow: "visible",
+      zIndex: 1,
     },
     quickTileWrap: {
       flex: 1,
       alignItems: "center",
       minWidth: 0,
+      overflow: "visible",
+      zIndex: 1,
     },
     quickTileShell: {
       width: "100%",
       position: "relative",
       overflow: "visible",
       borderRadius: 5,
+      zIndex: 2,
       ...Platform.select({
         ios: {
           shadowColor: "rgba(15, 23, 42, 0.22)",
@@ -636,27 +681,6 @@ function createStyles(colors: AppThemeColors) {
       fontSize: 11,
       fontWeight: "800",
       color: "#7c3aed",
-    },
-    quickBadgeDot: {
-      position: "absolute",
-      top: -4,
-      right: -4,
-      width: 12,
-      height: 12,
-      borderRadius: 6,
-      backgroundColor: colors.danger,
-      borderWidth: 2,
-      borderColor: "#ffffff",
-      ...Platform.select({
-        ios: {
-          shadowColor: "rgba(0,0,0,0.35)",
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.22,
-          shadowRadius: 4,
-        },
-        android: { elevation: 3 },
-        default: {},
-      }),
     },
     quickCaption: {
       marginTop: 8,

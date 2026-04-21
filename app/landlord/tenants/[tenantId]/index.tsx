@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigation } from "@react-navigation/native";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -49,6 +50,7 @@ type TenantDetail = {
 
 export default function TenantDetailScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { tenantId } = useLocalSearchParams<{ tenantId: string }>();
@@ -102,6 +104,13 @@ export default function TenantDetailScreen() {
   useEffect(() => {
     setEditingLateFee(false);
   }, [lateFeeTarget?.paymentId]);
+
+  useLayoutEffect(() => {
+    const t = detail?.user_name?.trim();
+    navigation.setOptions({
+      title: t && t.length > 0 ? t : "Tenant",
+    });
+  }, [navigation, detail?.user_name]);
 
   const loadDetail = useCallback(async () => {
     if (!tenantId || !landlordId) return;

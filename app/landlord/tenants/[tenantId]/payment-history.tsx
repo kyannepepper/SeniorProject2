@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from "react";
+import { useNavigation } from "@react-navigation/native";
+import { useCallback, useLayoutEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -19,18 +20,28 @@ import type { PaidPaymentRow } from "@/lib/paymentHistoryUtils";
 export default function LandlordTenantPaymentHistoryScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const navigation = useNavigation();
   const { tenantId } = useLocalSearchParams<{ tenantId: string }>();
   const { landlordId } = useAuth();
   const [rows, setRows] = useState<PaidPaymentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [tenantOk, setTenantOk] = useState(false);
+  const [tenantName, setTenantName] = useState<string | null>(null);
+
+  useLayoutEffect(() => {
+    const t = tenantName?.trim();
+    navigation.setOptions({
+      title: t && t.length > 0 ? `${t} · Payments` : "Payment history",
+    });
+  }, [navigation, tenantName]);
 
   const load = useCallback(
     async (options?: { skipFullScreenLoading?: boolean }) => {
       if (!tenantId || !landlordId) {
         setRows([]);
         setTenantOk(false);
+        setTenantName(null);
         setLoading(false);
         return;
       }
@@ -38,7 +49,7 @@ export default function LandlordTenantPaymentHistoryScreen() {
       try {
         const { data: tenantRow, error: tenantError } = await supabase
           .from("tenants")
-          .select("tenant_id, properties!inner(landlord_id)")
+          .select("tenant_id, user_id, properties!inner(landlord_id)")
           .eq("tenant_id", tenantId)
           .eq("properties.landlord_id", landlordId)
           .maybeSingle();
@@ -46,9 +57,21 @@ export default function LandlordTenantPaymentHistoryScreen() {
         if (tenantError || !tenantRow) {
           setTenantOk(false);
           setRows([]);
+          setTenantName(null);
           return;
         }
         setTenantOk(true);
+        const uid = (tenantRow as { user_id?: string | null }).user_id;
+        if (uid) {
+          const { data: userRow } = await supabase
+            .from("users")
+            .select("name")
+            .eq("user_id", uid)
+            .maybeSingle();
+          setTenantName((userRow as { name?: string } | null)?.name ?? null);
+        } else {
+          setTenantName(null);
+        }
 
         const { data, error } = await supabase
           .from("payments")
@@ -61,6 +84,7 @@ export default function LandlordTenantPaymentHistoryScreen() {
       } catch (e) {
         console.warn("Landlord tenant payment history", e);
         setRows([]);
+        setTenantName(null);
       } finally {
         setLoading(false);
         setRefreshing(false);
