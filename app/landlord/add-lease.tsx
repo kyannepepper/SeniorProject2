@@ -1,15 +1,15 @@
+import { DateField } from "@/components/DateField";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { panelElevation } from "@/lib/contrastScreenStyles";
+import { formatLocaleLongDate, formatLocalYMD } from "@/lib/dateLocal";
 import { supabase } from "@/lib/supabase";
 import type { AppThemeColors } from "@/lib/theme";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -38,15 +38,11 @@ export default function AddLeaseScreen() {
   const [rentAmount, setRentAmount] = useState("");
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
-  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
-  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [leaseDetailsText, setLeaseDetailsText] = useState("");
   /** After user edits the lease body, stop overwriting until they tap Regenerate */
   const leaseManuallyEditedRef = useRef(false);
 
-  const formatDateForDisplay = (d: Date) =>
-    d.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
-  const formatDateForSave = (d: Date) => d.toISOString().split("T")[0];
+  const formatDateForSave = (d: Date) => formatLocalYMD(d);
 
   useEffect(() => {
     async function load() {
@@ -119,8 +115,8 @@ export default function AddLeaseScreen() {
     const rent = rentAmount.trim()
       ? `$${Number(rentAmount.replace(/[^0-9.]/g, "")) || 0}`
       : "[Rent amount]";
-    const start = startDate ? formatDateForDisplay(startDate) : "[Start date]";
-    const end = endDate ? formatDateForDisplay(endDate) : "[End date]";
+    const start = startDate ? formatLocaleLongDate(startDate) : "[Start date]";
+    const end = endDate ? formatLocaleLongDate(endDate) : "[End date]";
     return `LEASE AGREEMENT
 
 This Lease Agreement is entered into between ${landlordName || "[Landlord]"} ("Landlord") and ${tenantName || "[Tenant]"} ("Tenant") for the property located at ${propertyAddress || propertyName || "[Property address]"}.
@@ -239,67 +235,26 @@ Tenant:   _________________________   Date: __________
       />
 
       <Text style={styles.label}>Start date</Text>
-      <TouchableOpacity
-        style={styles.input}
-        onPress={() => setShowStartDatePicker(true)}
-        activeOpacity={0.8}
-      >
-        <Text style={startDate ? styles.inputText : styles.inputPlaceholder}>
-          {startDate ? formatDateForDisplay(startDate) : "Tap to pick start date"}
-        </Text>
-      </TouchableOpacity>
-      {showStartDatePicker && (
-        <DateTimePicker
-          value={startDate ?? new Date()}
-          mode="date"
-          display={Platform.OS === "ios" ? "spinner" : "default"}
-          onChange={(_, selectedDate) => {
-            if (Platform.OS === "android") setShowStartDatePicker(false);
-            if (selectedDate != null) setStartDate(selectedDate);
-          }}
-        />
-      )}
-      {Platform.OS === "ios" && showStartDatePicker && (
-        <TouchableOpacity
-          style={styles.datePickerDone}
-          onPress={() => setShowStartDatePicker(false)}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.datePickerDoneText}>Done</Text>
-        </TouchableOpacity>
-      )}
+      <DateField
+        value={startDate}
+        onChange={setStartDate}
+        placeholder="Tap to pick start date"
+        fieldStyle={styles.input}
+        placeholderTextStyle={styles.inputPlaceholder}
+        valueTextStyle={styles.inputText}
+      />
 
       <Text style={styles.label}>End date</Text>
-      <TouchableOpacity
-        style={styles.input}
-        onPress={() => setShowEndDatePicker(true)}
-        activeOpacity={0.8}
-      >
-        <Text style={endDate ? styles.inputText : styles.inputPlaceholder}>
-          {endDate ? formatDateForDisplay(endDate) : "Tap to pick end date"}
-        </Text>
-      </TouchableOpacity>
-      {showEndDatePicker && (
-        <DateTimePicker
-          value={endDate ?? startDate ?? new Date()}
-          mode="date"
-          display={Platform.OS === "ios" ? "spinner" : "default"}
-          minimumDate={startDate ?? undefined}
-          onChange={(_, selectedDate) => {
-            if (Platform.OS === "android") setShowEndDatePicker(false);
-            if (selectedDate != null) setEndDate(selectedDate);
-          }}
-        />
-      )}
-      {Platform.OS === "ios" && showEndDatePicker && (
-        <TouchableOpacity
-          style={styles.datePickerDone}
-          onPress={() => setShowEndDatePicker(false)}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.datePickerDoneText}>Done</Text>
-        </TouchableOpacity>
-      )}
+      <DateField
+        value={endDate}
+        onChange={setEndDate}
+        placeholder="Tap to pick end date"
+        initialPickerValue={startDate ?? undefined}
+        minimumDate={startDate ?? undefined}
+        fieldStyle={styles.input}
+        placeholderTextStyle={styles.inputPlaceholder}
+        valueTextStyle={styles.inputText}
+      />
 
       <Text style={styles.label}>Lease details</Text>
       <Text style={styles.leaseHint}>
@@ -389,16 +344,6 @@ function createStyles(colors: AppThemeColors) {
     inputPlaceholder: {
       fontSize: 16,
       color: colors.placeholder,
-    },
-    datePickerDone: {
-      marginTop: 8,
-      paddingVertical: 12,
-      alignItems: "center",
-    },
-    datePickerDoneText: {
-      fontSize: 16,
-      fontWeight: "600",
-      color: colors.primary,
     },
     leaseHint: {
       fontSize: 13,

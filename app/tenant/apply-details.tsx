@@ -1,3 +1,5 @@
+import { DateField } from "@/components/DateField";
+import { formatLocalYMD } from "@/lib/dateLocal";
 import { useEffect, useMemo, useState } from "react";
 import {
   View,
@@ -8,9 +10,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
-  Platform,
 } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -33,7 +33,6 @@ export default function TenantApplicationDetailsScreen() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [moveInDate, setMoveInDate] = useState<Date | null>(null);
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -141,7 +140,7 @@ export default function TenantApplicationDetailsScreen() {
         p_name: fullName.trim(),
         p_email: email.trim(),
         p_phone: phone.trim() || null,
-        p_move_in_date: moveInDate ? moveInDate.toISOString().split("T")[0] : null,
+        p_move_in_date: moveInDate ? formatLocalYMD(moveInDate) : null,
         p_description: message.trim() || null,
         p_applicant_user_id: session.user.id,
         p_references: filledRefs.map((r) => ({
@@ -218,42 +217,15 @@ export default function TenantApplicationDetailsScreen() {
       />
 
       <Text style={styles.label}>Desired move-in date</Text>
-      <TouchableOpacity
-        style={styles.input}
-        onPress={() => setShowDatePicker(true)}
-        activeOpacity={0.8}
-      >
-        <Text style={moveInDate ? styles.inputText : styles.inputPlaceholder}>
-          {moveInDate
-            ? moveInDate.toLocaleDateString(undefined, {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })
-            : "Tap to pick year / month / day"}
-        </Text>
-      </TouchableOpacity>
-      {showDatePicker && (
-        <DateTimePicker
-          value={moveInDate ?? new Date()}
-          mode="date"
-          display={Platform.OS === "ios" ? "spinner" : "default"}
-          onChange={(_, selectedDate) => {
-            if (Platform.OS === "android") setShowDatePicker(false);
-            if (selectedDate != null) setMoveInDate(selectedDate);
-          }}
-          minimumDate={new Date()}
-        />
-      )}
-      {Platform.OS === "ios" && showDatePicker && (
-        <TouchableOpacity
-          style={styles.datePickerDone}
-          onPress={() => setShowDatePicker(false)}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.datePickerDoneText}>Done</Text>
-        </TouchableOpacity>
-      )}
+      <DateField
+        value={moveInDate}
+        onChange={setMoveInDate}
+        placeholder="Tap to pick year / month / day"
+        minimumDate={new Date(new Date().setHours(0, 0, 0, 0))}
+        fieldStyle={styles.input}
+        placeholderTextStyle={styles.inputPlaceholder}
+        valueTextStyle={styles.inputText}
+      />
 
       <Text style={styles.label}>Message to landlord</Text>
       <TextInput
@@ -412,16 +384,6 @@ function createStyles(colors: AppThemeColors) {
     inputPlaceholder: {
       fontSize: 16,
       color: colors.placeholder,
-    },
-    datePickerDone: {
-      marginTop: 8,
-      paddingVertical: 12,
-      alignItems: "center",
-    },
-    datePickerDoneText: {
-      fontSize: 16,
-      fontWeight: "600",
-      color: colors.primary,
     },
     multiline: {
       minHeight: 90,
