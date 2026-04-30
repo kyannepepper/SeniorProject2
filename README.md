@@ -1,50 +1,85 @@
-# Welcome to your Expo app 👋
+# Rent Squirrel
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+## About the project
 
-## Get started
+**Rent Squirrel** is a cross-platform rental management app for **landlords**, **tenants**, and **maintenance workers**. It helps small landlords and renters coordinate the full rental lifecycle in one place: listing and managing properties, submitting and reviewing applications, viewing lease details, recording rent (including late-fee awareness), and filing maintenance requests with optional photos.
 
-1. Install dependencies
+The app is built with **Expo** and **React Native** so a single codebase runs on **iOS**, **Android**, and **web**. Data and authentication are backed by **Supabase** (PostgreSQL, Auth, Row Level Security, RPC functions, and Storage for uploads). Role-specific dashboards keep each user type focused on the tasks that matter to them.
+
+## Screenshot
+
+Tenant dashboard: welcome header, property image, current rent due, landlord payment instructions (e.g. Venmo), **I paid my rent** action, and payment history.
+
+![Tenant dashboard — rent summary, how to pay, and payment history](docs/images/tenant-dashboard.png)
+
+## Stack
+
+| Layer | Technology |
+|--------|------------|
+| App | [Expo](https://expo.dev) ~54, [Expo Router](https://docs.expo.dev/router/introduction/) (file-based routes), React Native, TypeScript |
+| Backend | [Supabase](https://supabase.com) — PostgreSQL, Auth, Row Level Security, RPCs, Storage |
+| Client DB access | `@supabase/supabase-js` |
+
+Database schema and policies live in your **Supabase project** (Dashboard or any migrations you keep outside this repo). Optional dummy data: `scripts/seed_dummy_data.sql`.
+
+## Requirements
+
+- **Node.js** 20 or newer  
+- **npm** (or compatible package manager)  
+- A **Supabase** project with schema and policies already applied
+
+## Setup
+
+1. **Clone and install**
 
    ```bash
+   git clone <your-repo-url>
+   cd <project-directory>
    npm install
    ```
 
-2. Start the app
+2. **Environment**
 
-   ```bash
-   npx expo start
+   Create a `.env` file in the project root:
+
+   ```env
+   EXPO_PUBLIC_SUPABASE_URL=https://<your-project>.supabase.co
+   EXPO_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
    ```
 
-In the output, you'll find options to open the app in a
+   Expo loads these for client-side Supabase access. For production web (e.g. Vercel), set the same variables in the host’s environment settings.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+3. **Start the dev server**
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+   ```bash
+   npm start
+   ```
 
-## Get a fresh project
+   Then open in Expo Go, an iOS/Android simulator, or press `w` for web.
 
-When you're ready, run:
+## Scripts
 
-```bash
-npm run reset-project
-```
+| Command | Purpose |
+|---------|---------|
+| `npm start` | Start Expo dev server |
+| `npm run web` | Dev server with web target |
+| `npm run ios` / `npm run android` | Run on simulator/device (native tooling required) |
+| `npm run build` | Static web export (`expo export --platform web`, output in `dist/`) |
+| `npm run lint` | ESLint (Expo config) |
+| `npm run reset-project` | Expo starter reset (moves `app` to `app-example`; only if you intend to use it) |
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Project layout
 
-## Learn more
+- **`app/`** — Screens and navigation (`_layout.tsx`, role-based areas under `landlord/`, `tenant/`, `maintenance/`)
+- **`contexts/`** — React context (e.g. auth, theme)
+- **`lib/`** — Supabase client, helpers, theme
+- **`components/`** — Shared UI
+- **`scripts/`** — Utilities and optional SQL seeds (e.g. `seed_dummy_data.sql`)
 
-To learn more about developing your project with Expo, look at the following resources:
+## Web production build
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+Web is configured for **static export** (`app.json` → `web.output: "static"`). Deploy the `dist/` folder (for example with a host that serves static files and your chosen env vars). Do not point a single-page `rewrite` to `/` unless you switch to SPA output, or deep links to routes will break.
 
-## Join the community
+## License
 
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Private / academic use per your course or team policy.

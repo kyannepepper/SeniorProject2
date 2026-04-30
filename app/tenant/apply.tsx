@@ -38,33 +38,31 @@ export default function TenantApplicationScreen() {
     async function loadProperties() {
       setLoading(true);
       try {
-        const [{ data: tenantRows, error: tenantError }, { data: propRows, error: propError }] =
-          await Promise.all([
-            supabase.from("tenants").select("property_id").not("property_id", "is", null),
-            supabase
-              .from("properties")
-              .select("property_id, name, address, image_url")
-              .order("created_at", { ascending: false }),
-          ]);
-        if (tenantError) throw tenantError;
+        // Use `properties.occupied` (not a full `tenants` scan): applicants cannot read other
+        // tenants' rows under RLS, so listing tenant property_ids always returned empty and showed
+        // every property. `occupied` is set true when a landlord accepts an application.
+        const { data: propRows, error: propError } = await supabase
+          .from("properties")
+          .select("property_id, name, address, image_url, occupied")
+          .or("occupied.eq.false,occupied.is.null")
+          .order("created_at", { ascending: false });
         if (propError) throw propError;
 
-        const occupiedIds = new Set(
-          (tenantRows ?? [])
-            .map((t: { property_id: string | null }) => t.property_id)
-            .filter((id): id is string => Boolean(id))
-        );
-
         setProperties(
-          (propRows ?? [])
-            .filter((row: { property_id: string }) => !occupiedIds.has(row.property_id))
-            .map((row: { property_id: string; name: string; address: string; image_url: string | null }) => ({
+          (propRows ?? []).map(
+            (row: {
+              property_id: string;
+              name: string;
+              address: string;
+              image_url: string | null;
+            }) => ({
               property_id: row.property_id,
               name: row.name,
               address: row.address,
               landlord_email: null,
               image_url: row.image_url ?? null,
-            }))
+            })
+          )
         );
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : "Could not load properties.";
